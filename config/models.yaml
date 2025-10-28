@@ -1,0 +1,50 @@
+# LLM Model Configurations
+
+models:
+  deepseek:
+    name: "DeepSeek Chat V3.1"
+    api_provider: "deepseek"
+    model_id: "deepseek-chat"
+    enabled: true
+    priority: 1  # Start with this model first
+
+  gpt5:
+    name: "GPT-5"
+    api_provider: "openai"
+    model_id: "gpt-5"
+    enabled: false  # Enable when ready
+    priority: 2
+
+  claude:
+    name: "Claude Sonnet 4.5"
+    api_provider: "anthropic"
+    model_id: "claude-sonnet-4.5-20241022"
+    enabled: false
+    priority: 3
+
+  gemini:
+    name: "Gemini 2.5 Pro"
+    api_provider: "google"
+    model_id: "gemini-2.5-pro"
+    enabled: false
+    priority: 4
+
+  grok:
+    name: "Grok 4"
+    api_provider: "xai"
+    model_id: "grok-4"
+    enabled: false
+    priority: 5
+
+  qwen:
+    name: "Qwen 3 Max"
+    api_provider: "alibaba"
+    model_id: "qwen3-max"
+    enabled: false
+    priority: 6
+
+# API Configuration
+api_config:
+  timeout: 30  # seconds
+  max_retries: 3
+  rate_limit_delay: 1  # seconds between requests
