@@ -224,6 +224,166 @@ class HyperliquidClient:
         response = self._make_request(payload)
         return response
 
+    def get_meta_and_asset_contexts(self) -> Dict[str, Any]:
+        """
+        Get metadata and asset contexts (includes funding rates, OI, volume, etc.)
+
+        Returns:
+            Tuple of (meta, asset_contexts) where:
+            - meta: Market metadata (universe, margin tables)
+            - asset_contexts: List of dicts with per-coin data:
+                - funding: Funding rate
+                - openInterest: Total open interest
+                - markPx: Mark price
+                - oraclePx: Oracle price
+                - dayNtlVlm: 24h volume (notional)
+                - premium: Funding premium
+                - prevDayPx: Previous day price
+        """
+        payload = {
+            "type": "metaAndAssetCtxs"
+        }
+
+        response = self._make_request(payload)
+
+        # Response is [meta, asset_contexts]
+        if isinstance(response, list) and len(response) >= 2:
+            return {
+                'meta': response[0],
+                'asset_contexts': response[1]
+            }
+        else:
+            logger.warning("Unexpected response format from metaAndAssetCtxs")
+            return {'meta': {}, 'asset_contexts': []}
+
+    def get_funding_rate(self, coin: str) -> Optional[float]:
+        """
+        Get current funding rate for a specific coin
+
+        Args:
+            coin: Coin symbol (e.g., 'BTC', 'ETH')
+
+        Returns:
+            Funding rate as decimal (e.g., 0.0000125 = 0.00125%)
+            Returns None if coin not found
+        """
+        data = self.get_meta_and_asset_contexts()
+        asset_contexts = data['asset_contexts']
+        meta = data['meta']
+
+        # Find the index of the coin in the universe
+        universe = meta.get('universe', [])
+        coin_index = None
+
+        for idx, coin_meta in enumerate(universe):
+            if coin_meta['name'] == coin:
+                coin_index = idx
+                break
+
+        if coin_index is None:
+            logger.warning(f"Coin {coin} not found in universe")
+            return None
+
+        if coin_index >= len(asset_contexts):
+            logger.warning(f"Asset context not found for {coin}")
+            return None
+
+        ctx = asset_contexts[coin_index]
+        funding_rate = float(ctx.get('funding', 0))
+
+        logger.debug(f"Funding rate for {coin}: {funding_rate}")
+        return funding_rate
+
+    def get_open_interest(self, coin: str) -> Optional[float]:
+        """
+        Get current open interest for a specific coin
+
+        Args:
+            coin: Coin symbol (e.g., 'BTC', 'ETH')
+
+        Returns:
+            Open interest in number of contracts
+            Returns None if coin not found
+        """
+        data = self.get_meta_and_asset_contexts()
+        asset_contexts = data['asset_contexts']
+        meta = data['meta']
+
+        # Find the index of the coin in the universe
+        universe = meta.get('universe', [])
+        coin_index = None
+
+        for idx, coin_meta in enumerate(universe):
+            if coin_meta['name'] == coin:
+                coin_index = idx
+                break
+
+        if coin_index is None:
+            logger.warning(f"Coin {coin} not found in universe")
+            return None
+
+        if coin_index >= len(asset_contexts):
+            logger.warning(f"Asset context not found for {coin}")
+            return None
+
+        ctx = asset_contexts[coin_index]
+        open_interest = float(ctx.get('openInterest', 0))
+
+        logger.debug(f"Open interest for {coin}: {open_interest}")
+        return open_interest
+
+    def get_market_data(self, coin: str) -> Optional[Dict[str, Any]]:
+        """
+        Get comprehensive market data for a coin
+
+        Args:
+            coin: Coin symbol (e.g., 'BTC', 'ETH')
+
+        Returns:
+            Dictionary with:
+                - funding_rate: Current funding rate
+                - open_interest: Total open interest
+                - mark_price: Mark price
+                - oracle_price: Oracle price
+                - day_volume: 24h trading volume
+                - prev_day_price: Previous day's price
+                - premium: Funding premium
+        """
+        data = self.get_meta_and_asset_contexts()
+        asset_contexts = data['asset_contexts']
+        meta = data['meta']
+
+        # Find the index of the coin in the universe
+        universe = meta.get('universe', [])
+        coin_index = None
+
+        for idx, coin_meta in enumerate(universe):
+            if coin_meta['name'] == coin:
+                coin_index = idx
+                break
+
+        if coin_index is None:
+            logger.warning(f"Coin {coin} not found in universe")
+            return None
+
+        if coin_index >= len(asset_contexts):
+            logger.warning(f"Asset context not found for {coin}")
+            return None
+
+        ctx = asset_contexts[coin_index]
+
+        return {
+            'coin': coin,
+            'funding_rate': float(ctx.get('funding', 0)),
+            'open_interest': float(ctx.get('openInterest', 0)),
+            'mark_price': float(ctx.get('markPx', 0)),
+            'oracle_price': float(ctx.get('oraclePx', 0)),
+            'mid_price': float(ctx.get('midPx', 0)),
+            'day_volume': float(ctx.get('dayNtlVlm', 0)),
+            'prev_day_price': float(ctx.get('prevDayPx', 0)),
+            'premium': float(ctx.get('premium', 0))
+        }
+
     def get_candles_for_multiple_coins(
         self,
         coins: List[str],
