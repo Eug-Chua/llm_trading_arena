@@ -37,12 +37,12 @@ class LLMAgent(BaseLLMAgent):
         'openai': {
             'base_url': 'https://api.openai.com/v1',
             'env_var': 'OPENAI_API_KEY',
-            'default_model': 'gpt-4-turbo'
+            'default_model': 'gpt-4o'  # GPT-4o (latest, faster than turbo)
         },
         'anthropic': {
             'base_url': None,  # Uses native Anthropic SDK
             'env_var': 'ANTHROPIC_API_KEY',
-            'default_model': 'claude-sonnet-4.5-20241022'
+            'default_model': 'claude-sonnet-4-5-20250929'  # Claude 4.5 Sonnet (latest)
         },
         # Add more providers as needed
     }
@@ -53,7 +53,8 @@ class LLMAgent(BaseLLMAgent):
         model_id: Optional[str] = None,
         api_key: Optional[str] = None,
         temperature: float = 0.7,
-        max_tokens: int = 4000
+        max_tokens: int = 4000,
+        validate_api_key: bool = True
     ):
         """
         Initialize LLM agent
@@ -64,6 +65,7 @@ class LLMAgent(BaseLLMAgent):
             api_key: API key (defaults to environment variable)
             temperature: Sampling temperature (0-2)
             max_tokens: Maximum tokens in response
+            validate_api_key: If True, raises error when API key is missing (default: True)
         """
         if provider not in self.PROVIDERS:
             raise ValueError(f"Unsupported provider: {provider}. Choose from: {list(self.PROVIDERS.keys())}")
@@ -75,14 +77,25 @@ class LLMAgent(BaseLLMAgent):
         if api_key is None:
             api_key = os.getenv(provider_config['env_var'])
             if not api_key:
-                logger.warning(f"{provider_config['env_var']} not found. Using placeholder.")
-                api_key = "placeholder"
+                if validate_api_key:
+                    raise ValueError(
+                        f"\n❌ Missing API key for {provider}!\n\n"
+                        f"Please set {provider_config['env_var']} in your environment:\n"
+                        f"  1. Copy .env.example to .env\n"
+                        f"  2. Add your API key: {provider_config['env_var']}=sk-...\n"
+                        f"  3. Run: export $(cat .env | xargs)  # or source .env\n\n"
+                        f"Alternatively, pass api_key parameter directly to LLMAgent().\n"
+                    )
+                else:
+                    logger.warning(f"{provider_config['env_var']} not found. Using placeholder.")
+                    api_key = "placeholder"
 
         # Use default model if not specified
         if model_id is None:
             model_id = provider_config['default_model']
 
         self.model_id = model_id
+        self.validate_api_key = validate_api_key
 
         # Initialize base class
         super().__init__(
@@ -138,34 +151,72 @@ class LLMAgent(BaseLLMAgent):
         Raises:
             Exception: If API call fails
         """
-        if self.client_type == 'openai':
-            # OpenAI-compatible API (DeepSeek, OpenAI)
-            response = self.client.chat.completions.create(
-                model=self.model_id,
-                messages=[
-                    {"role": "system", "content": self._get_system_prompt()},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=self.temperature,
-                max_tokens=self.max_tokens
-            )
-            return response.choices[0].message.content
+        try:
+            if self.client_type == 'openai':
+                # OpenAI-compatible API (DeepSeek, OpenAI)
+                response = self.client.chat.completions.create(
+                    model=self.model_id,
+                    messages=[
+                        {"role": "system", "content": self._get_system_prompt()},
+                        {"role": "user", "content": prompt}
+                    ],
+                    temperature=self.temperature,
+                    max_tokens=self.max_tokens
+                )
+                return response.choices[0].message.content
 
-        elif self.client_type == 'anthropic':
-            # Anthropic Claude API
-            response = self.client.messages.create(
-                model=self.model_id,
-                max_tokens=self.max_tokens,
-                temperature=self.temperature,
-                system=self._get_system_prompt(),
-                messages=[
-                    {"role": "user", "content": prompt}
-                ]
-            )
-            return response.content[0].text
+            elif self.client_type == 'anthropic':
+                # Anthropic Claude API
+                response = self.client.messages.create(
+                    model=self.model_id,
+                    max_tokens=self.max_tokens,
+                    temperature=self.temperature,
+                    system=self._get_system_prompt(),
+                    messages=[
+                        {"role": "user", "content": prompt}
+                    ]
+                )
+                return response.content[0].text
 
-        else:
-            raise ValueError(f"API call not implemented for client type: {self.client_type}")
+            else:
+                raise ValueError(f"API call not implemented for client type: {self.client_type}")
+
+        except Exception as e:
+            error_msg = str(e).lower()
+
+            # Handle common API errors with helpful messages
+            if 'unauthorized' in error_msg or 'authentication' in error_msg or '401' in error_msg:
+                raise ValueError(
+                    f"\n❌ API Authentication Failed for {self.provider}!\n\n"
+                    f"Your API key appears to be invalid or expired.\n"
+                    f"Please check {self.PROVIDERS[self.provider]['env_var']} in your .env file.\n"
+                ) from e
+
+            elif 'rate limit' in error_msg or '429' in error_msg:
+                raise RuntimeError(
+                    f"\n⚠️  Rate Limit Exceeded for {self.provider}!\n\n"
+                    f"You've hit the API rate limit. Please wait and try again.\n"
+                    f"Consider using a different model or provider.\n"
+                ) from e
+
+            elif 'quota' in error_msg or 'insufficient' in error_msg:
+                raise RuntimeError(
+                    f"\n⚠️  API Quota Exceeded for {self.provider}!\n\n"
+                    f"You've exceeded your API quota or balance.\n"
+                    f"Please check your account and add credits if needed.\n"
+                ) from e
+
+            elif 'model' in error_msg and 'not found' in error_msg:
+                raise ValueError(
+                    f"\n❌ Model Not Found: {self.model_id}\n\n"
+                    f"The model '{self.model_id}' is not available for {self.provider}.\n"
+                    f"Check the model name or use the default model.\n"
+                ) from e
+
+            else:
+                # Re-raise with original error for unexpected issues
+                logger.error(f"API call failed: {e}")
+                raise
 
     def _get_system_prompt(self) -> str:
         """
