@@ -1,0 +1,101 @@
+{
+  "fetched_at": "2025-10-29T10:52:52.605210",
+  "models": {
+    "DeepSeek Chat V3.1": {
+      "model": "DeepSeek Chat V3.1",
+      "total_trades": 205,
+      "coins_traded": [
+        "BNB",
+        "BTC",
+        "DOGE",
+        "ETH",
+        "SOL",
+        "XRP"
+      ],
+      "total_volume_usd": 1356555.01,
+      "first_trade": "2025-10-18T06:14:46.005000",
+      "last_trade": "2025-10-29T04:52:36.672000",
+      "trade_frequency": 18.733526716593524
+    },
+    "Claude Sonnet 4.5": {
+      "model": "Claude Sonnet 4.5",
+      "total_trades": 223,
+      "coins_traded": [
+        "BNB",
+        "BTC",
+        "DOGE",
+        "ETH",
+        "SOL",
+        "XRP"
+      ],
+      "total_volume_usd": 1134505.27,
+      "first_trade": "2025-10-18T06:24:14.487000",
+      "last_trade": "2025-10-29T05:06:23.691000",
+      "trade_frequency": 20.372850831409878
+    },
+    "GPT-5": {
+      "model": "GPT-5",
+      "total_trades": 486,
+      "coins_traded": [
+        "BNB",
+        "BTC",
+        "DOGE",
+        "ETH",
+        "SOL",
+        "XRP"
+      ],
+      "total_volume_usd": 1107219.44,
+      "first_trade": "2025-10-18T06:04:29.806000",
+      "last_trade": "2025-10-29T05:46:25.570000",
+      "trade_frequency": 44.23227928194396
+    },
+    "Gemini 2.5 Pro": {
+      "model": "Gemini 2.5 Pro",
+      "total_trades": 1051,
+      "coins_traded": [
+        "BNB",
+        "BTC",
+        "DOGE",
+        "ETH",
+        "SOL",
+        "XRP"
+      ],
+      "total_volume_usd": 2778364.85,
+      "first_trade": "2025-10-18T06:03:51.502000",
+      "last_trade": "2025-10-29T10:41:55.563000",
+      "trade_frequency": 93.89711159762358
+    },
+    "Grok 4": {
+      "model": "Grok 4",
+      "total_trades": 141,
+      "coins_traded": [
+        "@156",
+        "BNB",
+        "BTC",
+        "DOGE",
+        "ETH",
+        "SOL",
+        "XRP"
+      ],
+      "total_volume_usd": 632928.6,
+      "first_trade": "2025-10-18T06:06:21.917000",
+      "last_trade": "2025-10-29T05:04:49.579000",
+      "trade_frequency": 12.868175138948013
+    },
+    "Qwen 3 Max": {
+      "model": "Qwen 3 Max",
+      "total_trades": 347,
+      "coins_traded": [
+        "BTC",
+        "DOGE",
+        "ETH",
+        "SOL",
+        "XRP"
+      ],
+      "total_volume_usd": 3190931.72,
+      "first_trade": "2025-10-18T06:06:57.267000",
+      "last_trade": "2025-10-29T09:28:50.261000",
+      "trade_frequency": 31.148462604547447
+    }
+  }
+}
