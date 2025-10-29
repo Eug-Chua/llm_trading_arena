@@ -22,19 +22,32 @@ class TradingEngine:
     Executes trade signals from LLM agents and manages positions.
     """
 
-    def __init__(self, starting_capital: float = 10000.0):
+    def __init__(
+        self,
+        starting_capital: float = 10000.0,
+        maker_fee: float = 0.0002,  # 0.02% maker fee (Hyperliquid)
+        taker_fee: float = 0.0005   # 0.05% taker fee (Hyperliquid)
+    ):
         """
         Initialize trading engine
 
         Args:
             starting_capital: Initial capital in USD
+            maker_fee: Maker fee rate (default: 0.02%)
+            taker_fee: Taker fee rate (default: 0.05%)
         """
         self.account = Account(
             starting_capital=starting_capital,
             available_cash=starting_capital
         )
+        self.maker_fee = maker_fee
+        self.taker_fee = taker_fee
+
+        # Track funding rates for each coin
+        self.funding_rates: Dict[str, float] = {}
 
         logger.info(f"Initialized trading engine with ${starting_capital:,.2f}")
+        logger.info(f"Fees: Maker {maker_fee*100:.3f}%, Taker {taker_fee*100:.3f}%")
 
     def execute_signals(
         self,
@@ -152,10 +165,17 @@ class TradingEngine:
         # With leverage, you only need: (price * quantity) / leverage
         required_cash = (current_price * signal.quantity) / signal.leverage
 
+        # Calculate entry fee (on notional value)
+        notional_value = current_price * signal.quantity
+        entry_fee = notional_value * self.taker_fee  # Assume taker for market orders
+
+        # Total cash needed = margin + fee
+        total_cash_needed = required_cash + entry_fee
+
         # Check if we have enough cash
-        if required_cash > self.account.available_cash:
-            logger.warning(f"Insufficient cash for {signal.coin}: need ${required_cash:.2f}, have ${self.account.available_cash:.2f}")
-            return f"REJECTED: Insufficient cash (need ${required_cash:.2f})"
+        if total_cash_needed > self.account.available_cash:
+            logger.warning(f"Insufficient cash for {signal.coin}: need ${total_cash_needed:.2f}, have ${self.account.available_cash:.2f}")
+            return f"REJECTED: Insufficient cash (need ${total_cash_needed:.2f})"
 
         # Create position
         position = Position(
@@ -168,11 +188,15 @@ class TradingEngine:
             profit_target=signal.profit_target,
             invalidation_condition=signal.invalidation_condition,
             confidence=signal.confidence,
-            risk_usd=signal.risk_usd
+            risk_usd=signal.risk_usd,
+            entry_fee=entry_fee
         )
 
-        # Deduct cash
-        self.account.available_cash -= required_cash
+        # Deduct cash (margin + fee)
+        self.account.available_cash -= total_cash_needed
+
+        # Track fees
+        self.account.total_fees_paid += entry_fee
 
         # Add position
         self.account.add_position(position)
@@ -275,13 +299,24 @@ class TradingEngine:
         # Update price to current
         position.update_price(current_price)
 
-        # Calculate P&L
+        # Calculate exit fee (on notional value at exit)
+        notional_value = current_price * position.quantity
+        exit_fee = notional_value * self.taker_fee  # Assume taker for market orders
+
+        # Calculate P&L (already includes entry fee and funding in unrealized_pnl)
         pnl = position.unrealized_pnl
 
-        # Return cash (initial capital + P&L)
+        # Subtract exit fee from PnL
+        net_pnl = pnl - exit_fee
+
+        # Return cash (initial capital + net P&L)
         initial_capital = (position.entry_price * position.quantity) / position.leverage
-        returned_cash = initial_capital + pnl
+        returned_cash = initial_capital + net_pnl
         self.account.available_cash += returned_cash
+
+        # Track fees
+        self.account.total_fees_paid += exit_fee
+        self.account.total_funding_paid += position.accumulated_funding
 
         # Log trade
         self.account.trade_log.append({
@@ -291,15 +326,79 @@ class TradingEngine:
             'quantity': position.quantity,
             'entry_price': position.entry_price,
             'exit_price': current_price,
-            'pnl': pnl,
+            'gross_pnl': pnl,
+            'exit_fee': exit_fee,
+            'net_pnl': net_pnl,
             'reason': reason
         })
 
         # Update account metrics
         self.account.update_return_percent()
 
-        logger.info(f"CLOSED {symbol}: {position.quantity} @ ${current_price:.2f}, P&L: ${pnl:.2f}, Reason: {reason}")
-        return f"EXECUTED: Closed position (P&L ${pnl:.2f}, {reason})"
+        logger.info(f"CLOSED {symbol}: {position.quantity} @ ${current_price:.2f}, Net P&L: ${net_pnl:.2f} (fee: ${exit_fee:.2f}), Reason: {reason}")
+        return f"EXECUTED: Closed position (Net P&L ${net_pnl:.2f}, {reason})"
+
+    def update_funding_rates(self, funding_rates: Dict[str, float]):
+        """
+        Update funding rates and apply funding costs to open positions
+
+        Args:
+            funding_rates: Dict mapping symbol to current funding rate
+        """
+        self.funding_rates = funding_rates
+
+        # Apply funding costs to all open positions
+        for symbol, position in self.account.positions.items():
+            if symbol in funding_rates:
+                position.apply_funding_cost(funding_rates[symbol])
+
+    def check_exit_conditions(self, current_prices: Dict[str, float]) -> List[Dict]:
+        """
+        Check if any open positions have hit stop-loss or profit-target
+
+        Args:
+            current_prices: Dict mapping symbol to current price
+
+        Returns:
+            List of exit info dicts for positions that were closed
+        """
+        exits = []
+
+        # Update prices first
+        self.account.update_prices(current_prices)
+
+        # Check each position
+        for symbol, position in list(self.account.positions.items()):
+            current_price = current_prices.get(symbol)
+            if current_price is None:
+                continue
+
+            exit_reason = None
+
+            # Check stop-loss (SL)
+            if position.stop_loss > 0:
+                if current_price <= position.stop_loss:
+                    exit_reason = f"Stop-loss hit (${position.stop_loss:.2f})"
+
+            # Check profit-target (PT)
+            if position.profit_target > 0:
+                if current_price >= position.profit_target:
+                    exit_reason = f"Profit-target hit (${position.profit_target:.2f})"
+
+            # Execute exit if condition met
+            if exit_reason:
+                # Save PnL before closing
+                pnl = position.unrealized_pnl
+                result = self._force_close(symbol, current_price, exit_reason)
+                exits.append({
+                    'symbol': symbol,
+                    'exit_price': current_price,
+                    'reason': exit_reason,
+                    'pnl': pnl,
+                    'result': result
+                })
+
+        return exits
 
     def get_account_state(self) -> Account:
         """
@@ -331,9 +430,13 @@ class TradingEngine:
             'total_return': self.account.total_return,
             'total_return_percent': self.account.total_return_percent,
             'available_cash': self.account.available_cash,
-            'open_positions': len(self.account.positions),
+            'num_positions': len(self.account.positions),
+            'open_positions': len(self.account.positions),  # Alias for backwards compatibility
             'total_trades': self.account.trade_count,
-            'sharpe_ratio': self.account.sharpe_ratio
+            'sharpe_ratio': self.account.sharpe_ratio,
+            'starting_capital': self.account.starting_capital,
+            'total_fees_paid': self.account.total_fees_paid,
+            'total_funding_paid': self.account.total_funding_paid
         }
 
     def __repr__(self) -> str:
