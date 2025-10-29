@@ -332,8 +332,8 @@ class TradingEngine:
             'reason': reason
         })
 
-        # Update account metrics
-        self.account.update_return_percent()
+        # Update account metrics (including Sharpe ratio)
+        self.account.update_performance_metrics()
 
         logger.info(f"CLOSED {symbol}: {position.quantity} @ ${current_price:.2f}, Net P&L: ${net_pnl:.2f} (fee: ${exit_fee:.2f}), Reason: {reason}")
         return f"EXECUTED: Closed position (Net P&L ${net_pnl:.2f}, {reason})"
@@ -420,7 +420,7 @@ class TradingEngine:
 
     def get_performance_summary(self) -> Dict:
         """
-        Get performance summary
+        Get performance summary (basic metrics for backwards compatibility)
 
         Returns:
             Performance metrics dict
@@ -438,6 +438,16 @@ class TradingEngine:
             'total_fees_paid': self.account.total_fees_paid,
             'total_funding_paid': self.account.total_funding_paid
         }
+
+    def get_detailed_performance(self) -> Dict:
+        """
+        Get detailed performance metrics
+
+        Returns:
+            Comprehensive performance metrics including Sharpe ratio, win rate,
+            max drawdown, profit factor, and more
+        """
+        return self.account.get_performance_metrics()
 
     def __repr__(self) -> str:
         """String representation"""

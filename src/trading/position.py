@@ -8,6 +8,8 @@ from dataclasses import dataclass, field
 from typing import Dict, Any, Optional
 from datetime import datetime
 
+from .performance import PerformanceTracker
+
 
 @dataclass
 class Position:
@@ -224,6 +226,9 @@ class Account:
     closed_positions: list = field(default_factory=list)
     trade_log: list = field(default_factory=list)
 
+    # Performance tracker (initialized lazily)
+    _performance_tracker: Optional[PerformanceTracker] = field(default=None, init=False, repr=False)
+
     @property
     def account_value(self) -> float:
         """
@@ -248,6 +253,45 @@ class Account:
     def update_return_percent(self):
         """Update total return percentage"""
         self.total_return_percent = (self.total_return / self.starting_capital) * 100
+
+    def update_performance_metrics(self):
+        """
+        Update all performance metrics including Sharpe ratio
+
+        This should be called after closing a position to recalculate metrics.
+        """
+        # Initialize tracker if needed
+        if self._performance_tracker is None:
+            self._performance_tracker = PerformanceTracker()
+
+        # Update Sharpe ratio
+        self.sharpe_ratio = self._performance_tracker.calculate_sharpe_ratio(
+            trade_log=self.trade_log,
+            starting_capital=self.starting_capital,
+            current_value=self.account_value
+        )
+
+        # Update return percent
+        self.update_return_percent()
+
+    def get_performance_metrics(self) -> Dict[str, Any]:
+        """
+        Get comprehensive performance metrics
+
+        Returns:
+            Dict with all performance metrics
+        """
+        # Initialize tracker if needed
+        if self._performance_tracker is None:
+            self._performance_tracker = PerformanceTracker()
+
+        return self._performance_tracker.calculate_all_metrics(
+            trade_log=self.trade_log,
+            starting_capital=self.starting_capital,
+            current_value=self.account_value,
+            total_fees_paid=self.total_fees_paid,
+            total_funding_paid=self.total_funding_paid
+        )
 
     def has_position(self, symbol: str) -> bool:
         """
