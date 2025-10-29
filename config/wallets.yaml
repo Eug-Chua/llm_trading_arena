@@ -1,0 +1,46 @@
+# Alpha Arena AI Model Wallet Addresses
+# Source: https://www.alpha-arena.org/ (October 2025 competition)
+
+wallets:
+  DeepSeek Chat V3.1:
+    address: "0xc20ac4dc4188660cbf555448af52694ca62b0734"
+    expected_performance: "+125%"
+    notes: "Leading model as of late October 2025"
+
+  Claude Sonnet 4.5:
+    address: "0x59fa085d106541a834017b97060bcbbb0aa82869"
+    expected_performance: "+10%"
+    notes: "Conservative trading strategy"
+
+  GPT-5:
+    address: "0x67293d914eafb26878534571add81f6bd2d9fe06"
+    expected_performance: "-60%"
+    notes: "Overtrading issues"
+
+  Gemini 2.5 Pro:
+    address: "0x1b7a7d099a670256207a30dd0ae13d35f278010f"
+    expected_performance: "-57%"
+    notes: "Highest trade frequency, overtrading"
+
+  Grok 4:
+    address: "0x56d652e62998251b56c8398fb11fcfe464c08f84"
+    expected_performance: "+13%"
+    notes: "Moderate performance"
+
+  Qwen 3 Max:
+    address: "0x7a8fd8bba33e37361ca6b0cb4518a44681bad2f3"
+    expected_performance: "+0%"
+    notes: "Break-even performance"
+
+# Competition details
+competition:
+  start_date: "2025-10-17"
+  end_date: "2025-11-03"
+  platform: "Hyperliquid"
+  initial_capital: 10000  # USD
+
+# Data collection settings
+data_collection:
+  output_dir: "data/wallet_trades"
+  incremental_updates: true
+  fetch_interval_hours: 24  # How often to update data
