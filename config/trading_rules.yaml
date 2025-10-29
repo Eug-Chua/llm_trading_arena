@@ -1,0 +1,78 @@
+# Alpha Arena Trading Rules Configuration
+
+trading_rules:
+  # Capital
+  starting_capital: 10000
+
+  # Leverage constraints
+  leverage:
+    min: 10
+    max: 20
+    default: 15
+
+  # Mandatory risk management
+  risk_management:
+    stop_loss_required: true
+    take_profit_required: true
+    can_remove_stops: false
+
+  # Trading frequency
+  update_interval_seconds: 180  # 3 minutes
+
+  # Coins to trade
+  symbols:
+    - BTC
+    - ETH
+    - SOL
+    - BNB
+    - XRP
+    - DOGE
+
+  # Position rules
+  position_rules:
+    # If position exists, only HOLD or CLOSE allowed
+    max_positions: 6  # One per symbol
+    allow_hedging: false
+
+# Technical Indicators Configuration
+indicators:
+  ema:
+    short_period: 20
+    long_period: 50
+
+  macd:
+    fast_period: 12
+    slow_period: 26
+    signal_period: 9
+
+  rsi:
+    short_period: 7
+    standard_period: 14
+
+  atr:
+    short_period: 3
+    standard_period: 14
+
+  # Data windows
+  intraday_candles: 10  # Last 10 data points for 3-min intervals
+  longterm_candles: 10  # Last 10 data points for 4-hour intervals
+
+# Data sources
+data_sources:
+  primary:
+    name: "Hyperliquid"
+    endpoint: "https://api.hyperliquid.xyz/info"
+    candle_interval: "3m"
+    longterm_interval: "4h"
+
+  backup:
+    name: "CoinGecko"
+    enabled: false
+
+# Performance Metrics
+metrics:
+  calculate_sharpe: true
+  calculate_sortino: true
+  calculate_max_drawdown: true
+  calculate_win_rate: true
+  risk_free_rate: 0.05  # 5% annual
