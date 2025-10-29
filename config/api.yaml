@@ -1,0 +1,48 @@
+# API Configuration for Data Sources
+
+# Hyperliquid API Settings
+hyperliquid:
+  base_url: "https://api.hyperliquid.xyz"
+  info_endpoint: "https://api.hyperliquid.xyz/info"
+  user_agent: "LLM-Trading-Arena-Research/1.0"
+  timeout_seconds: 30
+
+  # Data retention limits (discovered via testing)
+  retention_limits:
+    1m: 4    # days
+    3m: 10   # days
+    4h: 365  # days
+
+# Alpha Arena Specific Configuration
+alpha_arena:
+  # Trading pairs used in Alpha Arena competition
+  coins:
+    - BTC
+    - ETH
+    - SOL
+    - BNB
+    - DOGE
+    - XRP
+
+  # Default interval for Alpha Arena (matches official blog post)
+  default_interval: "3m"
+
+  # Competition period
+  start_date: "2025-10-17"
+  end_date: "2025-11-03"
+
+# nof1.ai Website (for scraping)
+nof1:
+  base_url: "https://nof1.ai"
+  homepage_url: "https://nof1.ai/"
+
+  # Scraper settings
+  scraper:
+    headless: true
+    timeout_seconds: 20
+    window_size: "1920,1080"
+
+# Rate limiting (optional - for future use)
+rate_limits:
+  hyperliquid_requests_per_second: 10
+  cache_ttl_seconds: 60
