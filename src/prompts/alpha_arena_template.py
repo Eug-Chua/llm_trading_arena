@@ -86,6 +86,34 @@ class AlphaArenaPrompt:
         self.start_time = datetime.now()
         self.invocation_count = 0
 
+    def _interpret_funding_rate(self, funding_rate: float) -> str:
+        """
+        Interpret funding rate and provide trading context
+
+        Args:
+            funding_rate: Funding rate as decimal (e.g., 0.0001 = 0.01%)
+
+        Returns:
+            Human-readable interpretation string
+        """
+        rate_pct = funding_rate * 100
+
+        # Determine direction and interpretation
+        if funding_rate > 0.02:  # > 0.02% is considered high
+            return f"⚠️ HIGH POSITIVE (Longs pay shorts {rate_pct:.4f}% every 8h - expensive to hold longs)"
+        elif funding_rate > 0.01:  # > 0.01% is moderate positive
+            return f"Positive (Longs pay shorts {rate_pct:.4f}% - moderately bullish market)"
+        elif funding_rate > 0:
+            return f"Slightly positive (Longs pay shorts {rate_pct:.4f}% - mildly bullish)"
+        elif funding_rate < -0.02:  # < -0.02% is high negative
+            return f"⚠️ HIGH NEGATIVE (Shorts pay longs {abs(rate_pct):.4f}% every 8h - expensive to hold shorts)"
+        elif funding_rate < -0.01:  # < -0.01% is moderate negative
+            return f"Negative (Shorts pay longs {abs(rate_pct):.4f}% - moderately bearish market)"
+        elif funding_rate < 0:
+            return f"Slightly negative (Shorts pay longs {abs(rate_pct):.4f}% - mildly bearish)"
+        else:
+            return "Neutral (No funding payments - balanced market)"
+
     def format_coin_data(self, data: MarketData) -> str:
         """
         Format market data for a single coin in Alpha Arena style
@@ -114,11 +142,18 @@ class AlphaArenaPrompt:
             else:
                 return f"{p:.6f}"
 
+        # Interpret funding rate
+        funding_interpretation = self._interpret_funding_rate(data.funding_rate)
+
+        # Format open interest change
+        oi_change = ((data.oi_latest - data.oi_average) / data.oi_average * 100) if data.oi_average > 0 else 0
+        oi_trend = "rising" if oi_change > 5 else ("falling" if oi_change < -5 else "stable")
+
         prompt = f"""ALL {data.coin} DATA
 current_price = {format_price(data.current_price)}, current_ema20 = {format_price(data.current_ema20)}, current_macd = {data.current_macd:.3f}, current_rsi (7 period) = {data.current_rsi_7:.3f}
 In addition, here is the latest {data.coin} open interest and funding rate for perps (the instrument you are trading):
-Open Interest: Latest: {data.oi_latest:.2f}  Average: {data.oi_average:.2f}
-Funding Rate: {data.funding_rate:.5e}
+Open Interest: Latest: {data.oi_latest:.2f} {data.coin}  |  Average: {data.oi_average:.2f} {data.coin}  |  Trend: {oi_trend} ({oi_change:+.1f}%)
+Funding Rate: {data.funding_rate * 100:.4f}% (paid every 8 hours) - {funding_interpretation}
 Intraday series (3-minute intervals, oldest → latest):
 {"Mid prices" if data.coin in ["SOL", "BNB", "XRP", "DOGE"] else "Mid prices"}: [{prices_str}]
 EMA indicators (20-period): [{ema_str}]
