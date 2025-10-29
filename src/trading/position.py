@@ -32,6 +32,11 @@ class Position:
     risk_usd: float                  # Dollar amount at risk
     entry_time: datetime = field(default_factory=datetime.now)
 
+    # Fee and funding tracking
+    entry_fee: float = 0.0           # Fee paid on entry
+    accumulated_funding: float = 0.0 # Accumulated funding costs
+    last_funding_time: Optional[datetime] = None  # Last funding rate update
+
     # Order IDs (for live trading)
     entry_oid: int = -1
     sl_oid: int = -1              # Stop-loss order ID
@@ -54,13 +59,17 @@ class Position:
     @property
     def unrealized_pnl(self) -> float:
         """
-        Calculate unrealized profit/loss
+        Calculate unrealized profit/loss (including fees and funding)
 
         Returns:
-            P&L in USD
+            P&L in USD (net of fees and funding costs)
         """
         price_diff = self.current_price - self.entry_price
-        return price_diff * self.quantity * self.leverage
+        gross_pnl = price_diff * self.quantity * self.leverage
+
+        # Subtract entry fee and accumulated funding costs
+        net_pnl = gross_pnl - self.entry_fee - self.accumulated_funding
+        return net_pnl
 
     @property
     def notional_usd(self) -> float:
@@ -94,6 +103,41 @@ class Position:
             new_price: New market price
         """
         self.current_price = new_price
+
+    def apply_funding_cost(self, funding_rate: float, current_time: Optional[datetime] = None):
+        """
+        Apply funding rate cost to position
+
+        Funding is typically charged every 8 hours. We calculate the cost based on
+        how much time has elapsed since last funding charge.
+
+        Args:
+            funding_rate: Current funding rate (e.g., 0.0001 = 0.01%)
+            current_time: Current timestamp (defaults to now)
+        """
+        if current_time is None:
+            current_time = datetime.now()
+
+        # Initialize last_funding_time on first call
+        if self.last_funding_time is None:
+            self.last_funding_time = self.entry_time
+
+        # Calculate hours since last funding charge
+        hours_elapsed = (current_time - self.last_funding_time).total_seconds() / 3600
+
+        # Funding is charged every 8 hours
+        funding_periods = hours_elapsed / 8.0
+
+        if funding_periods >= 1.0:
+            # Calculate funding cost: notional_value * funding_rate * periods
+            notional = self.current_price * self.quantity
+            funding_cost = notional * funding_rate * funding_periods
+
+            # Add to accumulated funding (positive = cost to us, negative = payment to us)
+            self.accumulated_funding += funding_cost
+
+            # Update last funding time
+            self.last_funding_time = current_time
 
     def is_liquidated(self) -> bool:
         """
@@ -144,7 +188,9 @@ class Position:
             'tp_oid': self.tp_oid,
             'wait_for_fill': self.wait_for_fill,
             'entry_oid': self.entry_oid,
-            'notional_usd': self.notional_usd
+            'notional_usd': self.notional_usd,
+            'entry_fee': self.entry_fee,
+            'accumulated_funding': self.accumulated_funding
         }
 
     def __repr__(self) -> str:
@@ -169,6 +215,10 @@ class Account:
     total_return_percent: float = 0.0
     sharpe_ratio: float = 0.0
     trade_count: int = 0
+
+    # Fee tracking
+    total_fees_paid: float = 0.0        # Total trading fees paid
+    total_funding_paid: float = 0.0     # Total funding costs paid
 
     # Trade history
     closed_positions: list = field(default_factory=list)
