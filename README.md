@@ -6,19 +6,38 @@ This project seeks to replicate [Alpha Arena](https://nof1.ai/) by Nof1.ai, wher
 
 ## 🎯 What is This Project?
 
-**Alpha Arena** is a live competition running from 17 Oct 25 to 3 Nov 25 where different LLMs (Large Language Models) trade crypto perpetuals autonomously. Each model receives market data, analyzes it, and makes trading decisions in real-time. As of 28 Oct 25, **DeepSeek handily outperforms** other models including GPT and Claude.
+**Alpha Arena** is a groundbreaking experiment by Nof1.ai that tests whether LLMs can function as systematic trading agents in real-world, dynamic, competitive environments. Unlike static AI benchmarks, Alpha Arena evaluates decision-making capabilities with real capital, live market data, and consequential execution.
 
-**This project:**
-- Seeks to replicate the exact prompt format and trading environment from Alpha Arena
-- Tests multiple LLM models head-to-head in controlled conditions
-- Analyzes DeepSeek's outperformance
+**Six leading LLMs** (DeepSeek, Claude, GPT-5, Gemini, Grok 4, Qwen 3) trade cryptocurrency perpetual futures on Hyperliquid with:
+- **$10,000 each** in real capital
+- **Identical prompts** and system configurations
+- **Live market data** (prices, technical indicators, volume)
+- **No news or narratives** - pure numerical trading
+- **~2-3 minute decision cycles** (mid-to-low frequency trading)
+
+### Our Replication Goals
+
+This project aims to replicate and extend Alpha Arena's research by:
+1. **Reproducing the exact trading environment** (prompt format, data pipeline, execution logic)
+2. **Testing LLMs head-to-head** in controlled, reproducible conditions
+3. **Understanding behavioral differences** across models (risk profiles, biases, patterns)
+4. **Identifying what makes DeepSeek successful** compared to general-purpose LLMs
+5. **Contributing to real-world AI evaluation** beyond static benchmarks
+
+**Key Research Questions:**
+- Can LLMs trade systematically with minimal guidance (zero-shot capability)?
+- What decision-loop components can safely run autonomously vs. where do models fail?
+- Do models exhibit distinct risk profiles, directional biases, and sizing preferences?
+- Why does DeepSeek (specialized) outperform GPT/Claude (general-purpose)?
+
+*Note: All agents receive the same user prompt template. System prompts are proprietary to Nof1.ai.*
 
 ---
 
 ## 🔍 Why This Matters
 
 ### The Big Question
-Can LLMs actually trade? And if so, which ones are best at it?
+Can LLMs actually trade? Do they reliably follow simple risk rules? Which parts of the decision loop can be trusted to run autonomously? Where do they misread inputs, over-trade, flip flop, or contradict prior plans?
 
 ### What We're Learning
 
