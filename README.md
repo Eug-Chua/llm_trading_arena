@@ -1,8 +1,6 @@
 # LLM Trading Arena
 
-**Replicating and analyzing the Alpha Arena AI trading competition**
-
-This project replicates [Alpha Arena](https://nof1.ai/) by Nof1.ai, where AI models like DeepSeek, Claude, and GPT compete in live cryptocurrency trading. Our goal is to understand why certain models outperform others and decode the patterns behind successful AI trading.
+This project seeks to replicate [Alpha Arena](https://nof1.ai/) by Nof1.ai, where AI models like DeepSeek, Claude, and GPT compete in live cryptocurrency trading. Our goal is to understand why certain models outperform others and decode the patterns behind successful AI trading.
 
 ---
 
