@@ -123,7 +123,8 @@ class HistoricalDataLoader:
             (df['timestamp'] <= timestamp)
         ].copy()
 
-        if len(window) == 0:
+        if len(window) == 0 and lookback_hours > 0:
+            # Only warn if we were actually trying to load data (lookback > 0)
             logger.warning(
                 f"No candles found for {coin} {interval} at {timestamp} "
                 f"(lookback {lookback_hours}h)"
