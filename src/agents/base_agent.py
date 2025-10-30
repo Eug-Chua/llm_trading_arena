@@ -28,6 +28,7 @@ class TradeSignal:
     leverage: int
     confidence: float
     risk_usd: float
+    close_reason: Optional[str] = None  # Reason for closing (only for close_position signals)
 
 
 @dataclass
@@ -279,7 +280,8 @@ class BaseLLMAgent(ABC):
                 invalidation_condition=data['invalidation_condition'],
                 leverage=int(data['leverage']),
                 confidence=float(data['confidence']),
-                risk_usd=float(data['risk_usd'])
+                risk_usd=float(data['risk_usd']),
+                close_reason=data.get('close_reason')  # Optional field
             )
 
         except (ValueError, TypeError) as e:
