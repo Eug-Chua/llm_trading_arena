@@ -11,7 +11,9 @@ Supports multiple LLM providers via a unified interface:
 """
 
 import os
-from typing import Optional
+import yaml
+from pathlib import Path
+from typing import Optional, Dict, Any
 from openai import OpenAI
 
 from .base_agent import BaseLLMAgent
@@ -25,27 +27,99 @@ class LLMAgent(BaseLLMAgent):
     Universal LLM agent supporting multiple providers
 
     Automatically routes to the correct API based on provider configuration.
+    Reads model configurations from config/models.yaml
     """
 
-    # Provider configurations
-    PROVIDERS = {
+    @staticmethod
+    def _load_model_config() -> Dict[str, Any]:
+        """Load model configuration from YAML file"""
+        config_path = Path(__file__).parent.parent.parent / "config" / "models.yaml"
+
+        if not config_path.exists():
+            logger.warning(f"Config file not found: {config_path}. Using defaults.")
+            return {}
+
+        try:
+            with open(config_path, 'r') as f:
+                config = yaml.safe_load(f)
+                return config.get('models', {})
+        except Exception as e:
+            logger.warning(f"Error loading config file: {e}. Using defaults.")
+            return {}
+
+    # Base provider configurations (API endpoints and env vars)
+    BASE_PROVIDERS = {
         'deepseek': {
             'base_url': 'https://api.deepseek.com',
             'env_var': 'DEEPSEEK_API_KEY',
-            'default_model': 'deepseek-chat'
         },
         'openai': {
             'base_url': 'https://api.openai.com/v1',
             'env_var': 'OPENAI_API_KEY',
-            'default_model': 'gpt-4o'  # GPT-4o (latest, faster than turbo)
         },
         'anthropic': {
             'base_url': None,  # Uses native Anthropic SDK
             'env_var': 'ANTHROPIC_API_KEY',
-            'default_model': 'claude-sonnet-4-5-20250929'  # Claude 4.5 Sonnet (latest)
         },
-        # Add more providers as needed
+        'google': {
+            'base_url': 'https://generativelanguage.googleapis.com/v1beta',
+            'env_var': 'GOOGLE_API_KEY',
+        },
+        'xai': {
+            'base_url': 'https://api.x.ai/v1',
+            'env_var': 'XAI_API_KEY',
+        },
+        'alibaba': {
+            'base_url': 'https://dashscope.aliyuncs.com/api/v1',
+            'env_var': 'ALIBABA_API_KEY',
+        },
     }
+
+    @classmethod
+    def _get_provider_config(cls, provider: str) -> Dict[str, Any]:
+        """
+        Get provider configuration, merging base config with models.yaml
+
+        Args:
+            provider: Provider name (deepseek, openai, anthropic, etc.)
+
+        Returns:
+            Provider configuration dict with base_url, env_var, and default_model
+        """
+        if provider not in cls.BASE_PROVIDERS:
+            raise ValueError(f"Unsupported provider: {provider}. Choose from: {list(cls.BASE_PROVIDERS.keys())}")
+
+        # Start with base config
+        config = cls.BASE_PROVIDERS[provider].copy()
+
+        # Load models.yaml to get model_id
+        model_configs = cls._load_model_config()
+
+        # Find matching model config by api_provider
+        default_model = None
+        for _model_key, model_data in model_configs.items():
+            if model_data.get('api_provider') == provider:
+                default_model = model_data.get('model_id')
+                break
+
+        # Fallback defaults if not in models.yaml
+        if default_model is None:
+            fallback_defaults = {
+                'deepseek': 'deepseek-chat',
+                'openai': 'gpt-4o',
+                'anthropic': 'claude-sonnet-4-5-20250929',
+                'google': 'gemini-2.0-flash-exp',
+                'xai': 'grok-beta',
+                'alibaba': 'qwen-max'
+            }
+            default_model = fallback_defaults.get(provider, 'unknown')
+            logger.warning(
+                f"No model_id found in config/models.yaml for provider '{provider}'. "
+                f"Using fallback: {default_model}"
+            )
+
+        config['default_model'] = default_model
+        return config
 
     def __init__(
         self,
@@ -67,11 +141,10 @@ class LLMAgent(BaseLLMAgent):
             max_tokens: Maximum tokens in response
             validate_api_key: If True, raises error when API key is missing (default: True)
         """
-        if provider not in self.PROVIDERS:
-            raise ValueError(f"Unsupported provider: {provider}. Choose from: {list(self.PROVIDERS.keys())}")
+        # Get provider configuration (merges base config + models.yaml)
+        provider_config = self._get_provider_config(provider)
 
         self.provider = provider
-        provider_config = self.PROVIDERS[provider]
 
         # Get API key from env if not provided
         if api_key is None:
@@ -90,9 +163,10 @@ class LLMAgent(BaseLLMAgent):
                     logger.warning(f"{provider_config['env_var']} not found. Using placeholder.")
                     api_key = "placeholder"
 
-        # Use default model if not specified
+        # Use default model if not specified (from models.yaml or fallback)
         if model_id is None:
             model_id = provider_config['default_model']
+            logger.info(f"Using model from config: {model_id}")
 
         self.model_id = model_id
         self.validate_api_key = validate_api_key
@@ -154,16 +228,36 @@ class LLMAgent(BaseLLMAgent):
         try:
             if self.client_type == 'openai':
                 # OpenAI-compatible API (DeepSeek, OpenAI)
-                response = self.client.chat.completions.create(
-                    model=self.model_id,
-                    messages=[
+                # GPT-5 models use max_completion_tokens, GPT-4 and earlier use max_tokens
+                api_params = {
+                    "model": self.model_id,
+                    "messages": [
                         {"role": "system", "content": self._get_system_prompt()},
                         {"role": "user", "content": prompt}
                     ],
-                    temperature=self.temperature,
-                    max_tokens=self.max_tokens
-                )
-                return response.choices[0].message.content
+                }
+
+                # GPT-5 and GPT-4.1 specific parameter handling
+                is_new_gpt = self.provider == 'openai' and ('gpt-5' in self.model_id.lower() or 'gpt-4.1' in self.model_id.lower())
+
+                if is_new_gpt:
+                    # GPT-5 and GPT-4.1 models: use max_completion_tokens, omit temperature (only supports default 1.0)
+                    api_params["max_completion_tokens"] = self.max_tokens
+                else:
+                    # GPT-4 and earlier: use max_tokens and temperature
+                    api_params["max_tokens"] = self.max_tokens
+                    api_params["temperature"] = self.temperature
+
+                response = self.client.chat.completions.create(**api_params)
+
+                # Debug logging for empty responses
+                content = response.choices[0].message.content
+                if not content:
+                    logger.warning(f"Empty response from {self.model_id}")
+                    logger.warning(f"  Finish reason: {response.choices[0].finish_reason}")
+                    logger.warning(f"  Usage: {response.usage}")
+
+                return content
 
             elif self.client_type == 'anthropic':
                 # Anthropic Claude API
@@ -225,8 +319,17 @@ class LLMAgent(BaseLLMAgent):
         Returns:
             System prompt string
         """
-        # Universal system prompt works for all models
-        return """You are an expert cryptocurrency trader managing a leveraged portfolio.
+        # Load system prompt from config file
+        from pathlib import Path
+        prompt_file = Path(__file__).parent.parent.parent / "config" / "prompts" / "system_prompt.txt"
+
+        try:
+            with open(prompt_file, 'r') as f:
+                return f.read().strip()
+        except FileNotFoundError:
+            logger.warning(f"System prompt file not found: {prompt_file}. Using default.")
+            # Fallback to default
+            return """You are an expert cryptocurrency trader managing a leveraged portfolio.
 
 Your task is to analyze market data and make trading decisions based on technical indicators,
 risk management principles, and existing position exit plans.
