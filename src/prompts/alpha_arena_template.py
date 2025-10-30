@@ -215,9 +215,12 @@ Available Cash: {account.available_cash:.2f}
 Current Account Value: {account.account_value:.2f}
 Current live positions & performance:
 """
-        # Add each position
-        for pos in account.positions:
-            prompt += self.format_position(pos) + "\n"
+        # Add each position or explicitly state none
+        if len(account.positions) == 0:
+            prompt += "NONE - No open positions currently\n"
+        else:
+            for pos in account.positions:
+                prompt += self.format_position(pos) + "\n"
 
         prompt += f"Sharpe Ratio: {account.sharpe_ratio:.3f}"
 
@@ -293,7 +296,17 @@ CURRENT MARKET STATE FOR ALL COINS
         Returns:
             Formatted output instructions string
         """
-        return """
+        # Load output format from config file
+        from pathlib import Path
+        prompt_file = Path(__file__).parent.parent.parent / "config" / "prompts" / "output_format.txt"
+
+        try:
+            with open(prompt_file, 'r') as f:
+                return f.read().strip()
+        except FileNotFoundError:
+            logger.warning(f"Output format file not found: {prompt_file}. Using default.")
+            # Fallback to default
+            return """
 REQUIRED OUTPUT FORMAT:
 
 Provide your response in TWO sections:
