@@ -46,13 +46,17 @@ class TradingEngine:
         # Track funding rates for each coin
         self.funding_rates: Dict[str, float] = {}
 
+        # Current timestamp for trade logging (set by execute_signals)
+        self._current_timestamp = datetime.now()
+
         logger.info(f"Initialized trading engine with ${starting_capital:,.2f}")
         logger.info(f"Fees: Maker {maker_fee*100:.3f}%, Taker {taker_fee*100:.3f}%")
 
     def execute_signals(
         self,
         signals: Dict[str, TradeSignal],
-        current_prices: Dict[str, float]
+        current_prices: Dict[str, float],
+        timestamp: Optional[datetime] = None
     ) -> Dict[str, str]:
         """
         Execute trade signals from LLM
@@ -60,11 +64,15 @@ class TradingEngine:
         Args:
             signals: Dict mapping symbol to TradeSignal
             current_prices: Dict mapping symbol to current price
+            timestamp: Historical timestamp for backtesting (uses current time if None)
 
         Returns:
             Dict mapping symbol to execution result
         """
         results = {}
+
+        # Store timestamp for trade logging
+        self._current_timestamp = timestamp if timestamp else datetime.now()
 
         # Update prices first
         self.account.update_prices(current_prices)
@@ -106,7 +114,7 @@ class TradingEngine:
         elif signal.signal == "hold":
             return self._execute_hold(signal, current_price)
         elif signal.signal == "close_position":
-            return self._execute_close(symbol, current_price)
+            return self._execute_close(symbol, current_price, signal)
         else:
             return f"ERROR: Unknown signal type '{signal.signal}'"
 
@@ -201,15 +209,16 @@ class TradingEngine:
         # Add position
         self.account.add_position(position)
 
-        # Log trade
+        # Log trade (account value is AFTER the trade)
         self.account.trade_log.append({
-            'timestamp': datetime.now(),
+            'timestamp': self._current_timestamp,
             'action': 'BUY',
             'symbol': signal.coin,
             'quantity': signal.quantity,
             'price': current_price,
             'leverage': signal.leverage,
-            'cost': required_cash
+            'cost': required_cash,
+            'account_value': self.account.account_value
         })
 
         logger.info(f"BOUGHT {signal.coin}: {signal.quantity} @ ${current_price:.2f} ({signal.leverage}x leverage)")
@@ -260,13 +269,14 @@ class TradingEngine:
 
         return f"HELD: P&L ${position.unrealized_pnl:.2f}"
 
-    def _execute_close(self, symbol: str, current_price: float) -> str:
+    def _execute_close(self, symbol: str, current_price: float, signal: Optional['TradeSignal'] = None) -> str:
         """
         Execute close signal (exit position)
 
         Args:
             symbol: Coin symbol
             current_price: Current market price
+            signal: Optional TradeSignal with close_reason
 
         Returns:
             Result message
@@ -277,7 +287,12 @@ class TradingEngine:
             logger.warning(f"Cannot close {symbol} - no position exists")
             return "REJECTED: No position to close"
 
-        return self._force_close(symbol, current_price, "USER-SIGNAL")
+        # Use close_reason from signal if provided, otherwise default to USER-SIGNAL
+        reason = "USER-SIGNAL"
+        if signal and signal.close_reason:
+            reason = f"USER-SIGNAL ({signal.close_reason})"
+
+        return self._force_close(symbol, current_price, reason)
 
     def _force_close(self, symbol: str, current_price: float, reason: str) -> str:
         """
@@ -318,9 +333,9 @@ class TradingEngine:
         self.account.total_fees_paid += exit_fee
         self.account.total_funding_paid += position.accumulated_funding
 
-        # Log trade
+        # Log trade (account value is AFTER the trade)
         self.account.trade_log.append({
-            'timestamp': datetime.now(),
+            'timestamp': self._current_timestamp,
             'action': 'CLOSE',
             'symbol': symbol,
             'quantity': position.quantity,
@@ -329,7 +344,8 @@ class TradingEngine:
             'gross_pnl': pnl,
             'exit_fee': exit_fee,
             'net_pnl': net_pnl,
-            'reason': reason
+            'reason': reason,
+            'account_value': self.account.account_value
         })
 
         # Update account metrics (including Sharpe ratio)
