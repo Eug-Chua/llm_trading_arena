@@ -330,6 +330,8 @@ Provide your response in TWO sections:
    - "buy": Open new position (only if no existing position for that coin)
 
    IMPORTANT:
+   - If you have NO position in a coin and DON'T want to trade it, simply OMIT that coin from your JSON response
+   - Only include coins where you have an existing position to hold/close, or want to open a new position
    - Cannot add to existing positions (no pyramiding)
    - Must set stop-loss, profit target, and invalidation condition for every trade
    - Check EACH position's invalidation condition carefully
