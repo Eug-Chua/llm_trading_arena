@@ -26,7 +26,7 @@ class CheckpointManager:
     - Metadata (model, dates, iterations)
     """
 
-    def __init__(self, checkpoint_dir: str = "checkpoints"):
+    def __init__(self, checkpoint_dir: str = "results/checkpoints"):
         """
         Initialize checkpoint manager
 
@@ -63,8 +63,14 @@ class CheckpointManager:
             include_llm_cache: Whether to include LLM cache in checkpoint
         """
         # Resolve filepath
-        if not Path(filepath).is_absolute():
-            filepath = self.checkpoint_dir / filepath
+        filepath_obj = Path(filepath)
+        if not filepath_obj.is_absolute():
+            # Only prepend checkpoint_dir if filepath doesn't already start with a results/ path
+            if not str(filepath).startswith('results/'):
+                filepath = self.checkpoint_dir / filepath
+            else:
+                # User provided full path from project root (e.g., results/checkpoints/...)
+                filepath = filepath_obj
 
         # Create checkpoint data
         checkpoint = {
@@ -112,8 +118,14 @@ class CheckpointManager:
             Checkpoint dict with all saved state
         """
         # Resolve filepath
-        if not Path(filepath).is_absolute():
-            filepath = self.checkpoint_dir / filepath
+        filepath_obj = Path(filepath)
+        if not filepath_obj.is_absolute():
+            # Only prepend checkpoint_dir if filepath doesn't already start with a results/ path
+            if not str(filepath).startswith('results/'):
+                filepath = self.checkpoint_dir / filepath
+            else:
+                # User provided full path from project root (e.g., results/checkpoints/...)
+                filepath = filepath_obj
 
         filepath = Path(filepath)
 
@@ -185,8 +197,14 @@ class CheckpointManager:
         }
 
         # Resolve filepath
-        if not Path(filepath).is_absolute():
-            filepath = self.checkpoint_dir / filepath
+        filepath_obj = Path(filepath)
+        if not filepath_obj.is_absolute():
+            # Only prepend checkpoint_dir if filepath doesn't already start with a results/ path
+            if not str(filepath).startswith('results/'):
+                filepath = self.checkpoint_dir / filepath
+            else:
+                # User provided full path from project root (e.g., results/checkpoints/...)
+                filepath = filepath_obj
 
         filepath = Path(filepath)
         filepath.parent.mkdir(parents=True, exist_ok=True)
