@@ -45,7 +45,7 @@ class BacktestEngine:
         use_llm_cache: bool = True,
         run_id: Optional[int] = None,
         data_dir: str = "data/historical",
-        checkpoint_dir: str = "checkpoints",
+        checkpoint_dir: str = "results/checkpoints",
         interval: str = "3m"
     ):
         """
@@ -218,22 +218,29 @@ class BacktestEngine:
         if checkpoint_path:
             self.save_checkpoint(checkpoint_path, timestamps[-1])
 
+            # Auto-generate analysis report after checkpoint is saved
+            logger.info("Generating analysis report...")
+            self._generate_analysis_report(checkpoint_path)
+
         # Get final results
         results = self._get_results()
 
         logger.info("=" * 80)
         logger.info("BACKTEST COMPLETE")
         logger.info("=" * 80)
-        logger.info(f"Final account value: ${results['account_value']:,.2f}")
-        logger.info(f"Total return: {results['total_return_percent']:+.2f}%")
-        logger.info(f"Sharpe ratio: {results['sharpe_ratio']:.3f}")
-        logger.info(f"Total trades: {results['total_trades']}")
+        logger.info(f"Final account value: ${results.get('current_value', 0):,.2f}")
+        logger.info(f"Total return: {results.get('total_return_pct', 0):+.2f}%")
+        logger.info(f"Sharpe ratio: {results.get('sharpe_ratio', 0):.3f}")
+        logger.info(f"Total trades: {results.get('total_trades', 0)}")
         logger.info("=" * 80)
 
         return results
 
     def _process_timestamp(self, timestamp: datetime):
         """Process a single timestamp"""
+        # Log the historical timestamp being processed
+        logger.info(f"[{timestamp.strftime('%Y-%m-%d %H:%M')}] Processing iteration {self.iteration}")
+
         # 1. Load historical candles at this timestamp
         # Adjust lookback based on interval
         if self.interval == '4h':
@@ -359,7 +366,7 @@ class BacktestEngine:
 
         # 8. Execute trades
         if response and response.trade_signals:
-            results = self.engine.execute_signals(response.trade_signals, current_prices)
+            results = self.engine.execute_signals(response.trade_signals, current_prices, timestamp)
 
     def _get_llm_decision(self, prompt: str, timestamp: datetime):
         """Get LLM decision with optional caching"""
@@ -462,6 +469,132 @@ class BacktestEngine:
             "llm_cache": self.llm_cache if self.use_llm_cache else {}
         }
         self.checkpoint_manager.save_metadata_json(json_path, checkpoint_data)
+
+        # Export LLM reasoning to readable markdown files
+        if self.use_llm_cache and self.llm_cache:
+            self._export_llm_reasoning(filepath)
+
+    def _export_llm_reasoning(self, checkpoint_path: str):
+        """Export LLM reasoning to a single JSON file for easy review"""
+
+        checkpoint_path = Path(checkpoint_path)
+
+        # Save to results/checkpoints/ folder with matching checkpoint name
+        # Generate filename matching checkpoint: checkpoint_name_reasoning.json
+        reasoning_file = checkpoint_path.parent / f"{checkpoint_path.stem}_reasoning.json"
+
+        logger.info(f"Exporting LLM reasoning to {reasoning_file}")
+
+        # Sort responses by timestamp
+        sorted_responses = sorted(self.llm_cache.items(), key=lambda x: x[1]['timestamp'])
+
+        # Build structured data
+        reasoning_data = {
+            "backtest_info": {
+                "checkpoint_id": checkpoint_path.stem,
+                "start_date": self.start_date,
+                "end_date": self.end_date,
+                "model": self.model,
+                "coins": self.coins,
+                "interval": self.interval if hasattr(self, 'interval') else None,
+                "total_iterations": len(sorted_responses),
+                "exported_at": datetime.now().isoformat()
+            },
+            "iterations": []
+        }
+
+        # Export each iteration
+        for i, (prompt_hash, response_data) in enumerate(sorted_responses, 1):
+            timestamp = response_data['timestamp']
+            model = response_data['model']
+            agent_response = response_data['response']
+
+            # Get raw response text and parsed signals
+            raw_text = agent_response.raw_response if hasattr(agent_response, 'raw_response') else str(agent_response)
+
+            # Extract signals if available
+            signals = []
+            if hasattr(agent_response, 'trade_signals') and agent_response.trade_signals:
+                # trade_signals can be either a dict or a list
+                trade_signals_data = agent_response.trade_signals
+                if isinstance(trade_signals_data, dict):
+                    # If dict, iterate over values
+                    for signal in trade_signals_data.values():
+                        signals.append({
+                            "coin": signal.coin,
+                            "signal": signal.signal,
+                            "quantity": signal.quantity,
+                            "leverage": signal.leverage,
+                            "stop_loss": signal.stop_loss,
+                            "profit_target": signal.profit_target,
+                            "confidence": signal.confidence,
+                            "risk_usd": signal.risk_usd,
+                            "invalidation_condition": signal.invalidation_condition
+                        })
+                else:
+                    # If list, iterate directly
+                    for signal in trade_signals_data:
+                        signals.append({
+                            "coin": signal.coin,
+                            "signal": signal.signal,
+                            "quantity": signal.quantity,
+                            "leverage": signal.leverage,
+                            "stop_loss": signal.stop_loss,
+                            "profit_target": signal.profit_target,
+                            "confidence": signal.confidence,
+                            "risk_usd": signal.risk_usd,
+                            "invalidation_condition": signal.invalidation_condition
+                        })
+
+            iteration_data = {
+                "iteration": i,
+                "timestamp": timestamp,
+                "model": model,
+                "raw_response": raw_text,
+                "signals": signals
+            }
+
+            reasoning_data["iterations"].append(iteration_data)
+
+        # Save to JSON file
+        import json
+        with open(reasoning_file, 'w') as f:
+            json.dump(reasoning_data, f, indent=2)
+
+        logger.info(f"Exported {len(sorted_responses)} LLM responses to {reasoning_file}")
+
+    def _generate_analysis_report(self, checkpoint_path: str):
+        """
+        Auto-generate analysis report and chart after backtest completes
+
+        Args:
+            checkpoint_path: Path to the checkpoint file that was just saved
+        """
+        try:
+            # Import the analysis functions
+            import sys
+            from pathlib import Path as PathLib
+
+            # Add scripts directory to path
+            scripts_dir = PathLib(__file__).parent.parent.parent / "scripts"
+            if str(scripts_dir) not in sys.path:
+                sys.path.insert(0, str(scripts_dir))
+
+            from analyze_backtest import analyze_checkpoint
+
+            # Generate report (will create both markdown and chart)
+            checkpoint_path = Path(checkpoint_path)
+            logger.info(f"Analyzing checkpoint: {checkpoint_path}")
+
+            # analyze_checkpoint will auto-generate filenames in results/reports/
+            analyze_checkpoint(str(checkpoint_path))
+
+            logger.info("✅ Analysis report generated successfully")
+
+        except Exception as e:
+            logger.error(f"Failed to generate analysis report: {e}")
+            logger.warning("You can manually generate the report later with:")
+            logger.warning(f"  python scripts/analyze_backtest.py {checkpoint_path}")
 
     def _get_results(self) -> Dict[str, Any]:
         """Get backtest results"""
