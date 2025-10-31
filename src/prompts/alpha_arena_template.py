@@ -231,7 +231,8 @@ Current live positions & performance:
         market_data: Dict[str, MarketData],
         account: AccountInfo,
         objective: Optional[str] = None,
-        include_output_format: bool = True
+        include_output_format: bool = True,
+        is_final_candle: bool = False
     ) -> str:
         """
         Generate complete Alpha Arena style prompt
@@ -241,6 +242,7 @@ Current live positions & performance:
             account: AccountInfo object with positions and performance
             objective: Optional custom objective (uses default if not provided)
             include_output_format: Whether to include output format instructions
+            is_final_candle: Whether this is the last candle of backtest (forces position closure)
 
         Returns:
             Complete formatted prompt string
@@ -281,6 +283,10 @@ CURRENT MARKET STATE FOR ALL COINS
         # Add account information
         prompt += self.format_account_info(account)
 
+        # Add final candle warning if applicable
+        if is_final_candle:
+            prompt += "\n\n⚠️ IMPORTANT: This is the FINAL candle of the backtest period. You MUST close ALL open positions. No positions should remain open.\n"
+
         # Add output format instructions (optional)
         if include_output_format:
             prompt += "\n\n" + self._get_output_format_instructions()
@@ -295,102 +301,23 @@ CURRENT MARKET STATE FOR ALL COINS
 
         Returns:
             Formatted output instructions string
+
+        Raises:
+            FileNotFoundError: If output format config file is missing
         """
         # Load output format from config file
         from pathlib import Path
         prompt_file = Path(__file__).parent.parent.parent / "config" / "prompts" / "output_format.txt"
 
-        try:
-            with open(prompt_file, 'r') as f:
-                return f.read().strip()
-        except FileNotFoundError:
-            logger.warning(f"Output format file not found: {prompt_file}. Using default.")
-            # Fallback to default
-            return """
-REQUIRED OUTPUT FORMAT:
+        if not prompt_file.exists():
+            raise FileNotFoundError(
+                f"Critical prompt file missing: {prompt_file}\n"
+                f"This file is required for the trading system to work properly.\n"
+                f"Please ensure config/prompts/output_format.txt exists."
+            )
 
-Provide your response in TWO sections:
-
-1. CHAIN OF THOUGHT:
-   - Analyze each current position against its invalidation condition
-   - Review technical indicators (RSI, MACD, EMA trends)
-   - Check if stop-loss or profit targets are near
-   - Explain your reasoning for each decision
-   - Consider risk management and portfolio balance
-
-2. TRADING DECISIONS:
-   For each coin, output JSON in this exact format:
-
-   {
-     "COIN": {
-       "trade_signal_args": {
-         "coin": "COIN",
-         "signal": "hold" | "close_position" | "buy",
-         "quantity": <number>,
-         "profit_target": <price>,
-         "stop_loss": <price>,
-         "invalidation_condition": "<description>",
-         "leverage": <number>,
-         "confidence": <0.0-1.0>,
-         "risk_usd": <dollar amount>
-       }
-     }
-   }
-
-   Signal types:
-   - "hold": Keep existing position (if invalidation condition NOT met)
-   - "close_position": Exit position (if invalidation met or profit/stop-loss hit)
-   - "buy": Open new position (only if no existing position for that coin)
-
-   IMPORTANT:
-   - If you have NO position in a coin and DON'T want to trade it, simply OMIT that coin from your JSON response
-   - Only include coins where you have an existing position to hold/close, or want to open a new position
-   - Cannot add to existing positions (no pyramiding)
-   - Must set stop-loss, profit target, and invalidation condition for every trade
-   - Check EACH position's invalidation condition carefully
-
-Example response:
-
-# CHAIN OF THOUGHT
-Reviewing my current positions:
-
-ETH: Current price 4108.75, entry 4189.12. Down $461 but above stop-loss (4065.43)
-and invalidation level (4000). RSI at 87.6 shows overbought but MACD positive.
-Decision: HOLD - no exit conditions met.
-
-BTC: Current 114110, entry 107343. Up $812. Stop-loss at 102026, invalidation
-at 105000. Strong uptrend with RSI 73. Decision: HOLD - riding the momentum.
-
-# TRADING DECISIONS
-{
-  "ETH": {
-    "trade_signal_args": {
-      "coin": "ETH",
-      "signal": "hold",
-      "quantity": 5.74,
-      "profit_target": 4568.31,
-      "stop_loss": 4065.43,
-      "invalidation_condition": "If price closes below 4000 on 3-minute candle",
-      "leverage": 10,
-      "confidence": 0.65,
-      "risk_usd": 722.78
-    }
-  },
-  "BTC": {
-    "trade_signal_args": {
-      "coin": "BTC",
-      "signal": "hold",
-      "quantity": 0.12,
-      "profit_target": 118136.15,
-      "stop_loss": 102026.675,
-      "invalidation_condition": "If price closes below 105000 on 3-minute candle",
-      "leverage": 10,
-      "confidence": 0.75,
-      "risk_usd": 619.23
-    }
-  }
-}
-"""
+        with open(prompt_file, 'r') as f:
+            return f.read().strip()
 
     def reset(self):
         """Reset invocation counter and start time"""
@@ -415,7 +342,7 @@ def create_sample_market_data(coin: str, base_price: float) -> MarketData:
     # Generate realistic price movement
     prices = []
     current = base_price
-    for i in range(10):
+    for _ in range(10):
         change = random.uniform(-0.01, 0.01) * current
         current += change
         prices.append(current)
