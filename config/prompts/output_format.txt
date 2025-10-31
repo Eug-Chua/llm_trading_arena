@@ -1,0 +1,100 @@
+REQUIRED OUTPUT FORMAT:
+
+Provide your response in TWO sections:
+
+1. CHAIN OF THOUGHT:
+   - Analyze each current position against its invalidation condition
+   - Review technical indicators (RSI, MACD, EMA trends)
+   - Check if stop-loss or profit targets are near
+   - Explain your reasoning for each decision
+   - Consider risk management and portfolio balance
+
+2. TRADING DECISIONS:
+   For each coin, output JSON in this exact format:
+
+   {
+     "COIN": {
+       "trade_signal_args": {
+         "coin": "COIN",
+         "signal": "hold" | "close_position" | "buy",
+         "quantity": <number>,
+         "profit_target": <price>,
+         "stop_loss": <price>,
+         "invalidation_condition": "<description>",
+         "leverage": <number>,
+         "confidence": <0.0-1.0>,
+         "risk_usd": <dollar amount>,
+         "close_reason": "<reason>" (REQUIRED for close_position, omit for hold/buy)
+       }
+     }
+   }
+
+   Signal types:
+   - "hold": Keep existing position (if invalidation condition NOT met)
+   - "close_position": Exit position (if invalidation met or profit/stop-loss hit)
+     * Must include close_reason explaining why (e.g., "Invalidation met", "Taking profits", "Bearish reversal", "Risk management")
+   - "buy": Open new position (only if no existing position for that coin)
+
+   IMPORTANT:
+   - NEVER output "hold" for a coin you don't have a position in - this is INVALID
+   - NEVER output "close_position" for a coin you don't have a position in - this is INVALID
+   - If you have NO position in a coin and DON'T want to trade it, DO NOT include that coin in your JSON at all
+   - Only include coins where you have an existing position to hold/close, OR want to open a new position with "buy"
+   - Cannot add to existing positions (no pyramiding)
+   - Must set stop-loss, profit target, and invalidation condition for every trade
+   - Check EACH position's invalidation condition carefully
+   - If this is the FINAL candle of the backtest period, you MUST close ALL open positions (no positions should remain open at end)
+
+Example response when you have 2 open positions (ETH, BTC) and 4 coins you don't want to trade (SOL, BNB, XRP, DOGE):
+
+# CHAIN OF THOUGHT
+Reviewing my current positions:
+
+ETH: Current price 4108.75, entry 4189.12. Down $461 but above stop-loss (4065.43)
+and invalidation level (4000). RSI at 87.6 shows overbought but MACD positive.
+Decision: HOLD - no exit conditions met.
+
+BTC: Current 114110, entry 107343. Up $812. Stop-loss at 102026, invalidation
+at 105000. Strong uptrend with RSI 73. Decision: HOLD - riding the momentum.
+
+SOL, BNB, XRP, DOGE: No positions. Market conditions unfavorable. Not entering trades.
+
+# TRADING DECISIONS
+{
+  "ETH": {
+    "trade_signal_args": {
+      "coin": "ETH",
+      "signal": "hold",
+      "quantity": 5.74,
+      "profit_target": 4568.31,
+      "stop_loss": 4065.43,
+      "invalidation_condition": "If price closes below 4000 on 3-minute candle",
+      "leverage": 10,
+      "confidence": 0.65,
+      "risk_usd": 722.78
+    }
+  },
+  "BTC": {
+    "trade_signal_args": {
+      "coin": "BTC",
+      "signal": "hold",
+      "quantity": 0.12,
+      "profit_target": 118136.15,
+      "stop_loss": 102026.675,
+      "invalidation_condition": "If price closes below 105000 on 3-minute candle",
+      "leverage": 10,
+      "confidence": 0.75,
+      "risk_usd": 619.23
+    }
+  }
+}
+
+WRONG - DO NOT DO THIS:
+{
+  "ETH": { ... },
+  "BTC": { ... },
+  "SOL": { "trade_signal_args": { "coin": "SOL", "signal": "hold", "leverage": 0, ... } },  # WRONG! Don't include coins with no position
+  "BNB": { "trade_signal_args": { "coin": "BNB", "signal": "hold", "leverage": 0, ... } },  # WRONG!
+  "XRP": { "trade_signal_args": { "coin": "XRP", "signal": "hold", "leverage": 0, ... } },  # WRONG!
+  "DOGE": { "trade_signal_args": { "coin": "DOGE", "signal": "hold", "leverage": 0, ... } }  # WRONG!
+}
