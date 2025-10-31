@@ -11,14 +11,15 @@ models:
   gpt5:
     name: "GPT-5"
     api_provider: "openai"
-    model_id: "gpt-5"
+    # model_id: "gpt-5"
+    model_id: "gpt-4o-mini"
     enabled: false  # Enable when ready
     priority: 2
 
   claude:
     name: "Claude Sonnet 4.5"
     api_provider: "anthropic"
-    model_id: "claude-sonnet-4.5-20241022"
+    model_id: "claude-sonnet-4-5-20250929"
     enabled: false
     priority: 3
 

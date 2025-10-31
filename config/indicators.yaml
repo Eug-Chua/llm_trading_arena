@@ -1,0 +1,35 @@
+# Technical Indicator Configuration
+# These are the exact settings used during backtesting
+# Match what the LLMs saw when making trading decisions
+
+# Data interval for OHLC candles
+data_interval: '4h'
+
+ema_periods: [20, 50]
+
+rsi_periods: [7, 14]
+
+atr_periods: [3, 14]
+
+macd:
+  fast: 12
+  slow: 26
+  signal: 9
+
+bollinger:
+  period: 20
+  std_dev: 2.0
+
+vwma_period: 20
+
+adx_period: 14
+
+supertrend:
+  period: 10
+  multiplier: 3.0
+
+cci_period: 20
+
+stochastic:
+  k_period: 14
+  d_period: 3
