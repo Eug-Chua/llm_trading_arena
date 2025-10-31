@@ -5,31 +5,17 @@
 # Data interval for OHLC candles
 data_interval: '4h'
 
+# EMA (Exponential Moving Average) - Trend identification
 ema_periods: [20, 50]
 
+# RSI (Relative Strength Index) - Overbought/oversold conditions
 rsi_periods: [7, 14]
 
+# ATR (Average True Range) - Volatility measurement
 atr_periods: [3, 14]
 
+# MACD (Moving Average Convergence Divergence) - Momentum and trend changes
 macd:
   fast: 12
   slow: 26
   signal: 9
-
-bollinger:
-  period: 20
-  std_dev: 2.0
-
-vwma_period: 20
-
-adx_period: 14
-
-supertrend:
-  period: 10
-  multiplier: 3.0
-
-cci_period: 20
-
-stochastic:
-  k_period: 14
-  d_period: 3
