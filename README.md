@@ -4,9 +4,9 @@ This project seeks to replicate [Alpha Arena](https://nof1.ai/) by Nof1.ai, wher
 
 ---
 
-## 🎯 What is This Project?
+## What is This Project?
 
-**Alpha Arena** is a groundbreaking experiment by Nof1.ai that tests whether LLMs can function as systematic trading agents in real-world, dynamic, competitive environments. Unlike static AI benchmarks, Alpha Arena evaluates decision-making capabilities with real capital, live market data, and consequential execution.
+**Alpha Arena** is a groundbreaking experiment by Nof1.ai that tests whether LLMs can function as systematic trading agents in real-world, dynamic environments. Unlike static AI benchmarks, Alpha Arena evaluates decision-making capabilities with real capital, live market data, and consequential execution.
 
 **Six leading LLMs** (DeepSeek, Claude, GPT-5, Gemini, Grok 4, Qwen 3) trade cryptocurrency perpetual futures on Hyperliquid with:
 - **$10,000 each** in real capital
@@ -21,20 +21,17 @@ This project aims to replicate and extend Alpha Arena's research by:
 1. **Reproducing the exact trading environment** (prompt format, data pipeline, execution logic)
 2. **Testing LLMs head-to-head** in controlled, reproducible conditions
 3. **Understanding behavioral differences** across models (risk profiles, biases, patterns)
-4. **Identifying what makes DeepSeek successful** compared to general-purpose LLMs
-5. **Contributing to real-world AI evaluation** beyond static benchmarks
 
 **Key Research Questions:**
 - Can LLMs trade systematically with minimal guidance (zero-shot capability)?
 - What decision-loop components can safely run autonomously vs. where do models fail?
 - Do models exhibit distinct risk profiles, directional biases, and sizing preferences?
-- Why does DeepSeek (specialized) outperform GPT/Claude (general-purpose)?
 
 *Note: All agents receive the same user prompt template. System prompts are proprietary to Nof1.ai.*
 
 ---
 
-## 🔍 Why This Matters
+## Why This Matters
 
 ### The Big Question
 Can LLMs actually trade? Do they reliably follow simple risk rules? Which parts of the decision loop can be trusted to run autonomously? Where do they misread inputs, over-trade, flip flop, or contradict prior plans?
@@ -53,7 +50,7 @@ Can LLMs actually trade? Do they reliably follow simple risk rules? Which parts 
 
 ---
 
-## 📊 How It Works
+## How It Works
 
 The system operates in a continuous loop:
 
@@ -74,6 +71,41 @@ The system operates in a continuous loop:
    ↓
    Loop back to step 1 (every 3 minutes)
 ```
+
+### Technical Indicators
+
+The system uses 5 core technical indicators to analyze market conditions. All parameters are configured in `config/indicators.yaml`:
+
+#### Price & Trend Indicators
+- **EMA (Exponential Moving Average)**: 20-period (short-term trend) and 50-period (long-term trend)
+  - Used for trend identification and crossover signals
+  - EMA20 > EMA50 = bullish, EMA20 < EMA50 = bearish
+
+#### Momentum & Oscillators
+- **RSI (Relative Strength Index)**: 7-period (fast) and 14-period (standard)
+  - Identifies overbought (>70) and oversold (<30) conditions
+  - Helps time entries and exits based on momentum extremes
+
+- **MACD (Moving Average Convergence Divergence)**: 12/26/9 configuration
+  - Fast: 12-period, Slow: 26-period, Signal: 9-period
+  - Detects momentum shifts and trend changes
+  - Bullish when MACD line crosses above signal line
+
+#### Volatility & Volume
+- **ATR (Average True Range)**: 3-period (fast) and 14-period (standard)
+  - Measures market volatility for position sizing and stop-loss placement
+  - Higher ATR = wider stops, lower position size
+
+- **Volume**: Raw trading volume for trend confirmation
+  - High volume + price move = strong trend
+  - Low volume + price move = weak/unreliable trend
+
+#### Perpetuals-Specific Metrics
+For crypto perpetual futures, the system also provides:
+- **Open Interest**: Total outstanding derivative positions (market positioning)
+- **Funding Rate**: Periodic payment between longs and shorts (market sentiment)
+
+All indicators operate on **4-hour candle data** for mid-frequency trading decisions.
 
 ### Example LLM Response
 
@@ -114,7 +146,7 @@ We're studying AI capabilities, not selling a trading system.
 
 ---
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - **Nof1.ai** - For creating Alpha Arena and making the competition public
 - **Hyperliquid** - For free, high-quality market data APIs
