@@ -18,6 +18,7 @@ Based on research findings from PROMPT_DESIGN_ANALYSIS.md
 
 import pandas as pd
 import numpy as np
+import yaml
 from typing import Dict, List, Any, Optional, Union
 from pathlib import Path
 
@@ -31,13 +32,49 @@ from ..utils.logger import setup_logger
 logger = setup_logger(__name__)
 
 
+def load_indicator_config() -> Dict[str, Any]:
+    """
+    Load indicator configuration from config file
+
+    Raises:
+        FileNotFoundError: If config/indicators.yaml does not exist
+
+    Returns:
+        Dict containing indicator configuration
+    """
+    config_path = Path(__file__).parent.parent.parent / "config" / "indicators.yaml"
+
+    if not config_path.exists():
+        raise FileNotFoundError(
+            f"Critical configuration file missing: {config_path}\n"
+            f"This file is required for the trading system to work properly.\n"
+            f"Please ensure config/indicators.yaml exists with proper indicator settings."
+        )
+
+    with open(config_path, 'r') as f:
+        config = yaml.safe_load(f)
+
+    # Validate required fields
+    required_fields = ['data_interval', 'ema_periods', 'rsi_periods', 'macd']
+    missing_fields = [field for field in required_fields if field not in config]
+
+    if missing_fields:
+        raise ValueError(
+            f"Missing required fields in config/indicators.yaml: {', '.join(missing_fields)}\n"
+            f"Please ensure all required indicator settings are defined."
+        )
+
+    return config
+
+
 class TechnicalIndicators:
     """Calculate technical indicators for price data"""
 
     def __init__(self):
         """Initialize indicator calculator"""
-        if ta is None:
-            logger.warning("pandas-ta not installed. Install with: pip install pandas-ta")
+        # Suppress warning - we're using manual calculations instead of pandas-ta
+        # if ta is None:
+        #     logger.warning("pandas-ta not installed. Install with: pip install pandas-ta")
 
     @staticmethod
     def prepare_dataframe(candles: List[Dict[str, Any]]) -> pd.DataFrame:
@@ -465,18 +502,7 @@ class TechnicalIndicators:
 
         # Use default config based on research if not provided
         if indicator_config is None:
-            indicator_config = {
-                'ema_periods': [20, 50],
-                'rsi_periods': [7, 14],
-                'atr_periods': [3, 14],
-                'macd': {'fast': 12, 'slow': 26, 'signal': 9},
-                'bollinger': {'period': 20, 'std_dev': 2.0},
-                'vwma_period': 20,
-                'adx_period': 14,
-                'supertrend': {'period': 10, 'multiplier': 3.0},
-                'cci_period': 20,
-                'stochastic': {'k_period': 14, 'd_period': 3}
-            }
+            indicator_config = load_indicator_config()
 
         logger.info(f"Calculating all indicators for {len(candles)} candles")
 
