@@ -5,10 +5,11 @@ Core system for executing trades and managing positions.
 Implements Alpha Arena trading rules.
 """
 
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Callable
 from datetime import datetime
 
 from .position import Position, Account
+from .factories import AccountFactory, PositionFactory, default_account_factory, default_position_factory
 from ..agents.base_agent import TradeSignal
 from ..utils.logger import setup_logger
 
@@ -26,7 +27,9 @@ class TradingEngine:
         self,
         starting_capital: float = 10000.0,
         maker_fee: float = 0.0002,  # 0.02% maker fee (Hyperliquid)
-        taker_fee: float = 0.0005   # 0.05% taker fee (Hyperliquid)
+        taker_fee: float = 0.0005,   # 0.05% taker fee (Hyperliquid)
+        account_factory: Optional[AccountFactory] = None,
+        position_factory: Optional[PositionFactory] = None
     ):
         """
         Initialize trading engine
@@ -35,11 +38,16 @@ class TradingEngine:
             starting_capital: Initial capital in USD
             maker_fee: Maker fee rate (default: 0.02%)
             taker_fee: Taker fee rate (default: 0.05%)
+            account_factory: Factory for creating Account instances (optional)
+            position_factory: Factory for creating Position instances (optional)
         """
-        self.account = Account(
-            starting_capital=starting_capital,
-            available_cash=starting_capital
-        )
+        # Use provided factories or defaults
+        _account_factory = account_factory or default_account_factory
+        self.position_factory = position_factory or default_position_factory
+
+        # Create account using factory
+        self.account = _account_factory(starting_capital)
+
         self.maker_fee = maker_fee
         self.taker_fee = taker_fee
 
@@ -185,8 +193,8 @@ class TradingEngine:
             logger.warning(f"Insufficient cash for {signal.coin}: need ${total_cash_needed:.2f}, have ${self.account.available_cash:.2f}")
             return f"REJECTED: Insufficient cash (need ${total_cash_needed:.2f})"
 
-        # Create position
-        position = Position(
+        # Create position using factory
+        position = self.position_factory(
             symbol=signal.coin,
             quantity=signal.quantity,
             entry_price=current_price,

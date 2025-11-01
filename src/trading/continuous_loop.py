@@ -1,29 +1,26 @@
 """
 Continuous Evaluation Loop
 
-Replicates Alpha Arena's continuous model evaluation pattern:
-- Fetches fresh market data every 3 minutes
-- Generates updated prompts with current state
-- Gets LLM trading decisions
-- Executes trades and monitors positions
-- Logs all activity
+Live trading simulation using real-time market data.
+Inherits common orchestration logic from TradingOrchestrator.
 
-Matches Alpha Arena pattern: "443 consecutive evaluations over 15 hours 44 minutes"
+Responsibilities:
+- Fetch live market data from Hyperliquid API
+- Run evaluation loop with configurable intervals
+- Log results to JSONL files
+- Handle stopping conditions (max iterations, duration)
 """
 
 import time
 import json
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple, Any
 from pathlib import Path
 
+from ..core.trading_orchestrator import TradingOrchestrator
 from ..data.market_data_pipeline import MarketDataPipeline
-from ..prompts.alpha_arena_template import (
-    AlphaArenaPrompt,
-    MarketData,
-    AccountInfo,
-    Position
-)
+from ..data.indicators import TechnicalIndicators
+from ..prompts.alpha_arena_template import AlphaArenaPrompt, MarketData
 from ..agents.llm_agent import LLMAgent
 from ..trading.trading_engine import TradingEngine
 from ..utils.logger import setup_logger
@@ -31,7 +28,7 @@ from ..utils.logger import setup_logger
 logger = setup_logger(__name__)
 
 
-class ContinuousEvaluationLoop:
+class ContinuousEvaluationLoop(TradingOrchestrator):
     """
     Continuous evaluation loop matching Alpha Arena's operational pattern
 
@@ -45,7 +42,7 @@ class ContinuousEvaluationLoop:
         self,
         llm_agent: LLMAgent,
         starting_capital: float = 10000.0,
-        interval_seconds: int = 180,  # 3 minutes
+        interval_seconds: int = 180,
         coins: Optional[List[str]] = None,
         log_dir: Optional[Path] = None
     ):
@@ -59,14 +56,18 @@ class ContinuousEvaluationLoop:
             coins: List of coins to trade (default: Alpha Arena coins)
             log_dir: Directory to save logs (default: logs/continuous/)
         """
-        self.llm_agent = llm_agent
+        # Initialize common components
+        trading_engine = TradingEngine(starting_capital=starting_capital)
+        prompt_gen = AlphaArenaPrompt()
+        indicators = TechnicalIndicators()
+
+        # Call parent constructor
+        super().__init__(llm_agent, trading_engine, prompt_gen, indicators)
+
+        # Live-specific components
+        self.pipeline = MarketDataPipeline()
         self.interval_seconds = interval_seconds
         self.coins = coins or ['BTC', 'ETH', 'SOL', 'BNB', 'XRP', 'DOGE']
-
-        # Initialize components
-        self.pipeline = MarketDataPipeline()
-        self.prompt_gen = AlphaArenaPrompt()
-        self.engine = TradingEngine(starting_capital=starting_capital)
 
         # State tracking
         self.start_time = datetime.now()
@@ -77,11 +78,10 @@ class ContinuousEvaluationLoop:
         self.log_dir = log_dir or Path("logs/continuous")
         self.log_dir.mkdir(parents=True, exist_ok=True)
 
-        # Session log file
         session_id = self.start_time.strftime("%Y%m%d_%H%M%S")
         self.session_log_file = self.log_dir / f"session_{session_id}.jsonl"
 
-        logger.info(f"Initialized continuous loop: {self.llm_agent.model_name}")
+        logger.info(f"Initialized continuous loop: {llm_agent.model_name}")
         logger.info(f"Starting capital: ${starting_capital:,.2f}")
         logger.info(f"Interval: {interval_seconds}s ({interval_seconds/60:.1f} min)")
         logger.info(f"Coins: {', '.join(self.coins)}")
@@ -144,82 +144,82 @@ class ContinuousEvaluationLoop:
         logger.info("=" * 80)
 
         try:
-            # Step 1: Fetch fresh market data
-            logger.info("📊 Fetching market data...")
-            market_data_raw = self.pipeline.fetch_and_process(
-                coins=self.coins,
-                lookback_hours_3m=3,
-                lookback_hours_4h=240
-            )
+            # Use parent's template method for common logic
+            self.process_iteration(iteration_start)
 
-            # Convert to MarketData objects
-            market_data = self._convert_to_market_data(market_data_raw)
-            logger.info(f"✓ Fetched data for {len(market_data)} coins")
-
-            # Step 2: Get current prices for execution
-            current_prices = self.pipeline.get_current_prices(coins=self.coins)
-            logger.info(f"✓ Current prices: {self._format_prices(current_prices)}")
-
-            # Step 2.5: Update funding rates for open positions
-            funding_rates = {coin: data.funding_rate for coin, data in market_data.items()}
-            self.engine.update_funding_rates(funding_rates)
-
-            # Step 3: Check automatic exit conditions (stop-loss/profit-target)
-            logger.info("🎯 Checking exit conditions...")
-            exits = self.engine.check_exit_conditions(current_prices)
-            if exits:
-                logger.info(f"✓ Executed {len(exits)} automatic exits")
-                for exit_info in exits:
-                    logger.info(f"  → {exit_info}")
-
-            # Step 4: Generate prompt with current account state
-            logger.info("📝 Generating prompt...")
-            account_info = self._get_account_info()
-            prompt = self.prompt_gen.generate_prompt(market_data, account_info)
-            logger.info(f"✓ Generated prompt ({len(prompt):,} chars)")
-
-            # Step 5: Get LLM decision
-            logger.info(f"🤖 Querying LLM ({self.llm_agent.model_name})...")
-            response = self.llm_agent.generate_decision(prompt)
-            logger.info(f"✓ Received decision: {len(response.trade_signals)} signals")
-
-            # Step 6: Execute trades
-            logger.info("💰 Executing trades...")
-            results = self.engine.execute_signals(
-                response.trade_signals,
-                current_prices
-            )
-
-            # Log trade results
-            self._log_trade_results(results)
-
-            # Step 7: Get performance summary
+            # Log performance summary
             summary = self.engine.get_performance_summary()
-            logger.info(f"\n📈 Account Status:")
+            logger.info("\n📈 Account Status:")
             logger.info(f"  Value: ${summary['account_value']:,.2f}")
             logger.info(f"  Return: {summary['total_return_percent']:+.2f}%")
             logger.info(f"  Positions: {summary['num_positions']}")
             logger.info(f"  Trades: {summary['total_trades']}")
 
-            # Step 8: Log iteration data
-            self._log_iteration({
-                'iteration': self.iteration_count,
-                'timestamp': iteration_start.isoformat(),
-                'elapsed_seconds': (datetime.now() - iteration_start).total_seconds(),
-                'market_data': {coin: data.current_price for coin, data in market_data.items()},
-                'account': summary,
-                'trades': results,
-                'exits': exits
-            })
-
             self.last_evaluation_time = datetime.now()
-
             logger.info(f"✅ Iteration #{self.iteration_count} complete")
 
         except Exception as e:
             logger.error(f"❌ Iteration #{self.iteration_count} failed: {e}")
             import traceback
             traceback.print_exc()
+
+    def _fetch_market_data(self, timestamp: datetime) -> Tuple[Dict, Dict]:
+        """Fetch live market data from Hyperliquid API"""
+        logger.info("📊 Fetching market data...")
+
+        # Fetch raw data from pipeline
+        market_data_raw = self.pipeline.fetch_and_process(
+            coins=self.coins,
+            lookback_hours_3m=3,
+            lookback_hours_4h=240
+        )
+
+        # Convert to MarketData objects
+        market_data = self._convert_to_market_data(market_data_raw)
+        logger.info(f"✓ Fetched data for {len(market_data)} coins")
+
+        # Get current prices
+        current_prices = self.pipeline.get_current_prices(coins=self.coins)
+        logger.info(f"✓ Current prices: {self._format_prices(current_prices)}")
+
+        # Update funding rates for open positions
+        funding_rates = {coin: data.funding_rate for coin, data in market_data.items()}
+        self.engine.update_funding_rates(funding_rates)
+
+        return market_data, current_prices
+
+    def _track_results(self, results: Dict, response: Any, market_data: Dict, timestamp: datetime):
+        """Track results by logging to JSONL file"""
+        # Log trade results to console
+        self._log_trade_results(results)
+
+        # Get performance summary
+        summary = self.engine.get_performance_summary()
+
+        # Log full iteration data to JSONL
+        self._log_iteration({
+            'iteration': self.iteration_count,
+            'timestamp': timestamp.isoformat(),
+            'elapsed_seconds': (datetime.now() - timestamp).total_seconds(),
+            'market_data': {coin: data.current_price for coin, data in market_data.items()},
+            'account': summary,
+            'trades': results,
+            'llm_chain_of_thought': response.chain_of_thought,
+            'llm_decisions': {
+                coin: {
+                    'signal': signal.signal,
+                    'quantity': signal.quantity,
+                    'stop_loss': signal.stop_loss,
+                    'profit_target': signal.profit_target,
+                    'invalidation_condition': signal.invalidation_condition,
+                    'leverage': signal.leverage,
+                    'confidence': signal.confidence,
+                    'risk_usd': signal.risk_usd,
+                    'close_reason': signal.close_reason
+                }
+                for coin, signal in response.trade_signals.items()
+            }
+        })
 
     def _convert_to_market_data(self, raw_data: Dict) -> Dict[str, MarketData]:
         """Convert pipeline output to MarketData objects"""
@@ -260,54 +260,25 @@ class ContinuousEvaluationLoop:
 
         return market_data
 
-    def _get_account_info(self) -> AccountInfo:
-        """Get current account state as AccountInfo object"""
-        summary = self.engine.get_performance_summary()
-
-        # Convert positions to Position objects
-        positions = []
-        for pos_dict in self.engine.account.positions.values():
-            positions.append(Position(
-                symbol=pos_dict.symbol,
-                quantity=pos_dict.quantity,
-                entry_price=pos_dict.entry_price,
-                current_price=pos_dict.current_price,
-                liquidation_price=pos_dict.liquidation_price,
-                unrealized_pnl=pos_dict.unrealized_pnl,
-                leverage=pos_dict.leverage,
-                exit_plan=pos_dict.exit_plan,
-                confidence=pos_dict.confidence,
-                risk_usd=pos_dict.risk_usd,
-                notional_usd=pos_dict.notional_value,
-                sl_oid=getattr(pos_dict, 'sl_oid', -1),
-                tp_oid=getattr(pos_dict, 'tp_oid', -1),
-                wait_for_fill=False,
-                entry_oid=getattr(pos_dict, 'entry_oid', -1)
-            ))
-
-        return AccountInfo(
-            total_return_percent=summary['total_return_percent'],
-            available_cash=summary['available_cash'],
-            account_value=summary['account_value'],
-            positions=positions,
-            sharpe_ratio=0.0  # TODO: Calculate Sharpe ratio
-        )
-
     def _log_trade_results(self, results: Dict):
         """Log trade execution results"""
         for coin, result in results.items():
-            if result['success']:
-                action = result['action']
-                if action == 'opened':
-                    logger.info(f"  ✓ {coin}: OPENED position at ${result['price']:,.2f}")
-                elif action == 'closed':
-                    pnl = result.get('pnl', 0)
-                    pnl_str = f"{pnl:+,.2f}" if pnl else "N/A"
-                    logger.info(f"  ✓ {coin}: CLOSED position, P&L: ${pnl_str}")
-                elif action == 'held':
-                    logger.info(f"  → {coin}: HOLD")
-            else:
-                logger.warning(f"  ✗ {coin}: {result['reason']}")
+            # Handle both string results and dict results
+            if isinstance(result, str):
+                logger.info(f"  → {coin}: {result}")
+            elif isinstance(result, dict):
+                if result.get('success'):
+                    action = result.get('action')
+                    if action == 'opened':
+                        logger.info(f"  ✓ {coin}: OPENED position at ${result['price']:,.2f}")
+                    elif action == 'closed':
+                        pnl = result.get('pnl', 0)
+                        pnl_str = f"{pnl:+,.2f}" if pnl else "N/A"
+                        logger.info(f"  ✓ {coin}: CLOSED position, P&L: ${pnl_str}")
+                    elif action == 'held':
+                        logger.info(f"  → {coin}: HOLD")
+                else:
+                    logger.warning(f"  ✗ {coin}: {result.get('reason', 'Unknown error')}")
 
     def _log_iteration(self, data: Dict):
         """Save iteration data to log file"""

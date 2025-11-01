@@ -32,94 +32,108 @@ class LLMAgent(BaseLLMAgent):
 
     @staticmethod
     def _load_model_config() -> Dict[str, Any]:
-        """Load model configuration from YAML file"""
+        """
+        Load model configuration from YAML file
+
+        Raises:
+            FileNotFoundError: If config/models.yaml does not exist
+            ValueError: If config file is invalid
+
+        Returns:
+            Dict containing model and provider configurations
+        """
         config_path = Path(__file__).parent.parent.parent / "config" / "models.yaml"
 
         if not config_path.exists():
-            logger.warning(f"Config file not found: {config_path}. Using defaults.")
-            return {}
+            raise FileNotFoundError(
+                f"Critical configuration file missing: {config_path}\n"
+                f"This file is required for LLM agent initialization.\n"
+                f"Please ensure config/models.yaml exists with proper model settings."
+            )
 
         try:
             with open(config_path, 'r') as f:
                 config = yaml.safe_load(f)
-                return config.get('models', {})
-        except Exception as e:
-            logger.warning(f"Error loading config file: {e}. Using defaults.")
-            return {}
 
-    # Base provider configurations (API endpoints and env vars)
-    BASE_PROVIDERS = {
-        'deepseek': {
-            'base_url': 'https://api.deepseek.com',
-            'env_var': 'DEEPSEEK_API_KEY',
-        },
-        'openai': {
-            'base_url': 'https://api.openai.com/v1',
-            'env_var': 'OPENAI_API_KEY',
-        },
-        'anthropic': {
-            'base_url': None,  # Uses native Anthropic SDK
-            'env_var': 'ANTHROPIC_API_KEY',
-        },
-        'google': {
-            'base_url': 'https://generativelanguage.googleapis.com/v1beta',
-            'env_var': 'GOOGLE_API_KEY',
-        },
-        'xai': {
-            'base_url': 'https://api.x.ai/v1',
-            'env_var': 'XAI_API_KEY',
-        },
-        'alibaba': {
-            'base_url': 'https://dashscope.aliyuncs.com/api/v1',
-            'env_var': 'ALIBABA_API_KEY',
-        },
-    }
+                if not config:
+                    raise ValueError(f"Config file {config_path} is empty")
+
+                if 'models' not in config:
+                    raise ValueError(
+                        f"Config file {config_path} missing 'models' section.\n"
+                        f"Expected structure: models: {{model_name: {{api_provider: ..., model_id: ...}}}}"
+                    )
+
+                if 'providers' not in config:
+                    raise ValueError(
+                        f"Config file {config_path} missing 'providers' section.\n"
+                        f"Expected structure: providers: {{provider_name: {{base_url: ..., env_var: ...}}}}"
+                    )
+
+                return config
+        except yaml.YAMLError as e:
+            raise ValueError(f"Invalid YAML in {config_path}: {e}")
 
     @classmethod
     def _get_provider_config(cls, provider: str) -> Dict[str, Any]:
         """
-        Get provider configuration, merging base config with models.yaml
+        Get provider configuration from models.yaml
 
         Args:
             provider: Provider name (deepseek, openai, anthropic, etc.)
 
+        Raises:
+            ValueError: If provider not found in config or missing required fields
+
         Returns:
             Provider configuration dict with base_url, env_var, and default_model
         """
-        if provider not in cls.BASE_PROVIDERS:
-            raise ValueError(f"Unsupported provider: {provider}. Choose from: {list(cls.BASE_PROVIDERS.keys())}")
+        # Load configuration
+        full_config = cls._load_model_config()
+        providers = full_config.get('providers', {})
+        models = full_config.get('models', {})
 
-        # Start with base config
-        config = cls.BASE_PROVIDERS[provider].copy()
-
-        # Load models.yaml to get model_id
-        model_configs = cls._load_model_config()
-
-        # Find matching model config by api_provider
-        default_model = None
-        for _model_key, model_data in model_configs.items():
-            if model_data.get('api_provider') == provider:
-                default_model = model_data.get('model_id')
-                break
-
-        # Fallback defaults if not in models.yaml
-        if default_model is None:
-            fallback_defaults = {
-                'deepseek': 'deepseek-chat',
-                'openai': 'gpt-4o',
-                'anthropic': 'claude-sonnet-4-5-20250929',
-                'google': 'gemini-2.0-flash-exp',
-                'xai': 'grok-beta',
-                'alibaba': 'qwen-max'
-            }
-            default_model = fallback_defaults.get(provider, 'unknown')
-            logger.warning(
-                f"No model_id found in config/models.yaml for provider '{provider}'. "
-                f"Using fallback: {default_model}"
+        # Check if provider exists
+        if provider not in providers:
+            available = list(providers.keys())
+            raise ValueError(
+                f"Provider '{provider}' not found in config/models.yaml.\n"
+                f"Available providers: {available}\n"
+                f"Please add provider configuration to config/models.yaml under 'providers' section."
             )
 
-        config['default_model'] = default_model
-        return config
+        # Get provider config
+        provider_config = providers[provider].copy()
+
+        # Validate required fields
+        required_fields = ['env_var']
+        missing = [f for f in required_fields if f not in provider_config]
+        if missing:
+            raise ValueError(
+                f"Provider '{provider}' missing required fields: {missing}\n"
+                f"Each provider must have: env_var (and optionally base_url)"
+            )
+
+        # Find default model for this provider
+        default_model = None
+        for model_key, model_data in models.items():
+            if model_data.get('api_provider') == provider:
+                default_model = model_data.get('model_id')
+                if not default_model:
+                    raise ValueError(
+                        f"Model '{model_key}' for provider '{provider}' missing 'model_id' field"
+                    )
+                break
+
+        # Fail if no model found
+        if default_model is None:
+            raise ValueError(
+                f"No model found for provider '{provider}' in config/models.yaml.\n"
+                f"Please add a model entry with 'api_provider: {provider}' and 'model_id: <model_name>'"
+            )
+
+        provider_config['default_model'] = default_model
+        return provider_config
 
     def __init__(
         self,
@@ -191,8 +205,14 @@ class LLMAgent(BaseLLMAgent):
         Args:
             provider_config: Provider configuration dict
         """
-        if self.provider in ['deepseek', 'openai']:
+        if self.provider in ['deepseek', 'openai', 'google', 'xai', 'alibaba']:
             # OpenAI-compatible API
+            if 'base_url' not in provider_config:
+                raise ValueError(
+                    f"Provider '{self.provider}' missing 'base_url' in config/models.yaml.\n"
+                    f"OpenAI-compatible providers require a base_url."
+                )
+
             self.client = OpenAI(
                 api_key=self.api_key,
                 base_url=provider_config['base_url']
@@ -210,7 +230,11 @@ class LLMAgent(BaseLLMAgent):
                 raise
 
         else:
-            raise ValueError(f"Client initialization not implemented for: {self.provider}")
+            raise ValueError(
+                f"Provider '{self.provider}' not supported.\n"
+                f"Supported providers: deepseek, openai, anthropic, google, xai, alibaba\n"
+                f"Please check config/models.yaml for available providers."
+            )
 
     def _call_llm_api(self, prompt: str) -> str:
         """
@@ -280,10 +304,17 @@ class LLMAgent(BaseLLMAgent):
 
             # Handle common API errors with helpful messages
             if 'unauthorized' in error_msg or 'authentication' in error_msg or '401' in error_msg:
+                # Get env_var from config for error message
+                try:
+                    provider_config = self._get_provider_config(self.provider)
+                    env_var = provider_config.get('env_var', 'API_KEY')
+                except Exception:
+                    env_var = 'API_KEY'
+
                 raise ValueError(
                     f"\n❌ API Authentication Failed for {self.provider}!\n\n"
                     f"Your API key appears to be invalid or expired.\n"
-                    f"Please check {self.PROVIDERS[self.provider]['env_var']} in your .env file.\n"
+                    f"Please check {env_var} in your .env file.\n"
                 ) from e
 
             elif 'rate limit' in error_msg or '429' in error_msg:
@@ -316,6 +347,9 @@ class LLMAgent(BaseLLMAgent):
         """
         Get system prompt for LLM
 
+        Raises:
+            FileNotFoundError: If system prompt file is missing
+
         Returns:
             System prompt string
         """
@@ -323,43 +357,23 @@ class LLMAgent(BaseLLMAgent):
         from pathlib import Path
         prompt_file = Path(__file__).parent.parent.parent / "config" / "prompts" / "system_prompt.txt"
 
-        try:
-            with open(prompt_file, 'r') as f:
-                return f.read().strip()
-        except FileNotFoundError:
-            logger.warning(f"System prompt file not found: {prompt_file}. Using default.")
-            # Fallback to default
-            return """You are an expert cryptocurrency trader managing a leveraged portfolio.
+        if not prompt_file.exists():
+            raise FileNotFoundError(
+                f"System prompt file missing: {prompt_file}\n"
+                f"This file is required for LLM agent to function.\n"
+                f"Please create config/prompts/system_prompt.txt with the system prompt."
+            )
 
-Your task is to analyze market data and make trading decisions based on technical indicators,
-risk management principles, and existing position exit plans.
+        with open(prompt_file, 'r') as f:
+            prompt = f.read().strip()
 
-Always provide your response in TWO sections:
-1. CHAIN OF THOUGHT - Detailed reasoning analyzing each position
-2. TRADING DECISIONS - Structured JSON format with trade signals
+        if not prompt:
+            raise ValueError(
+                f"System prompt file is empty: {prompt_file}\n"
+                f"Please add content to the system prompt file."
+            )
 
-Be precise with numbers and follow these trading rules:
-- Set stop-loss and profit target for every position (MANDATORY)
-- Define invalidation condition for each trade (MANDATORY)
-- Check EACH position's invalidation condition carefully before deciding to hold or close
-- No pyramiding - cannot add to existing positions
-
-Output JSON in this exact format:
-{
-  "COIN": {
-    "trade_signal_args": {
-      "coin": "COIN",
-      "signal": "hold" | "close_position" | "buy",
-      "quantity": <number>,
-      "profit_target": <price>,
-      "stop_loss": <price>,
-      "invalidation_condition": "<description>",
-      "leverage": <10-20>,
-      "confidence": <0.0-1.0>,
-      "risk_usd": <dollar amount>
-    }
-  }
-}"""
+        return prompt
 
 
 def create_agent(

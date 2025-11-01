@@ -237,8 +237,8 @@ class Account:
         Returns:
             Total account value in USD
         """
-        # Sum collateral locked in positions + their unrealized P&L
-        position_value = sum(pos.capital_used + pos.unrealized_pnl for pos in self.positions.values())
+        # Sum collateral locked in positions (notional / leverage) + their unrealized P&L
+        position_value = sum((pos.notional_usd / pos.leverage) + pos.unrealized_pnl for pos in self.positions.values())
         return self.available_cash + position_value
 
     @property

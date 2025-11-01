@@ -2,28 +2,34 @@
 Backtest Engine
 
 Event-driven backtesting engine for trading strategies.
-Supports checkpoint/resume and non-determinism testing.
+Inherits common orchestration logic from TradingOrchestrator.
+
+Responsibilities:
+- Load historical market data from parquet files
+- Manage backtest state (timestamps, iteration count)
+- Cache LLM responses for efficiency
+- Save/load checkpoints for resuming backtests
+- Generate analysis reports
 """
 
 import hashlib
 from datetime import datetime
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Tuple
 from pathlib import Path
 
 from .historical_loader import HistoricalDataLoader
 from .checkpoint_manager import CheckpointManager
-from ..data.market_data_pipeline import MarketDataPipeline
+from ..core.trading_orchestrator import TradingOrchestrator
 from ..data.indicators import TechnicalIndicators
-from ..prompts.alpha_arena_template import AlphaArenaPrompt, MarketData, AccountInfo, Position as PromptPosition
+from ..prompts.alpha_arena_template import AlphaArenaPrompt, MarketData
 from ..agents.llm_agent import LLMAgent
 from ..trading.trading_engine import TradingEngine
-from ..trading.performance import PerformanceTracker
 from ..utils.logger import setup_logger
 
 logger = setup_logger(__name__)
 
 
-class BacktestEngine:
+class BacktestEngine(TradingOrchestrator):
     """
     Backtest trading strategies on historical data
 
@@ -46,7 +52,8 @@ class BacktestEngine:
         run_id: Optional[int] = None,
         data_dir: str = "data/historical",
         checkpoint_dir: str = "results/checkpoints",
-        interval: str = "3m"
+        interval: str = "3m",
+        temperature: float = 0.0
     ):
         """
         Initialize backtest engine
@@ -63,7 +70,9 @@ class BacktestEngine:
             data_dir: Directory with historical data
             checkpoint_dir: Directory for checkpoints
             interval: Decision interval ('1m', '3m', '4h')
+            temperature: LLM temperature (0.0=deterministic, 0.7=creative)
         """
+        # Backtest-specific settings
         self.start_date = start_date
         self.end_date = end_date
         self.coins = coins
@@ -71,27 +80,36 @@ class BacktestEngine:
         self.use_llm_cache = use_llm_cache
         self.run_id = run_id
         self.interval = interval
+        self.temperature = temperature
 
-        # Initialize components
+        # Initialize backtest-specific components
         self.data_loader = HistoricalDataLoader(data_dir)
         self.checkpoint_manager = CheckpointManager(checkpoint_dir)
-        self.prompt_gen = AlphaArenaPrompt()
-        self.indicators = TechnicalIndicators()
 
-        # LLM response cache
+        # LLM response cache (backtest-specific)
         self.llm_cache: Dict[str, Any] = {}
+
+        # Backtest state tracking
+        self.timestamps: Optional[List[datetime]] = None
+        self.current_idx: int = 0
 
         # Resume from checkpoint if provided
         if checkpoint_path:
             self._resume_from_checkpoint(checkpoint_path)
         else:
-            # Fresh start
-            self.engine = TradingEngine(starting_capital=starting_capital)
-            self.llm_agent = LLMAgent(provider=model, validate_api_key=False)
+            # Fresh start - initialize components
+            llm_agent = LLMAgent(provider=model, temperature=temperature, validate_api_key=False)
+            trading_engine = TradingEngine(starting_capital=starting_capital)
+            prompt_gen = AlphaArenaPrompt()
+            indicators = TechnicalIndicators()
+
+            # Call parent constructor
+            super().__init__(llm_agent, trading_engine, prompt_gen, indicators)
+
             self.iteration = 0
             self.start_time = datetime.now()
 
-        logger.info(f"Initialized BacktestEngine:")
+        logger.info("Initialized BacktestEngine:")
         logger.info(f"  Date range: {start_date} to {end_date}")
         logger.info(f"  Coins: {', '.join(coins)}")
         logger.info(f"  Model: {model}")
@@ -112,17 +130,17 @@ class BacktestEngine:
 
         # Restore account state
         account_state = checkpoint["account"]
-        self.engine = TradingEngine(
+        trading_engine = TradingEngine(
             starting_capital=account_state["starting_capital"]
         )
 
         # Restore account fields
-        self.engine.account.available_cash = account_state["available_cash"]
-        self.engine.account.total_return_percent = account_state.get("total_return_percent", 0.0)
-        self.engine.account.sharpe_ratio = account_state.get("sharpe_ratio", 0.0)
-        self.engine.account.trade_count = account_state.get("trade_count", 0)
-        self.engine.account.total_fees_paid = account_state.get("total_fees_paid", 0.0)
-        self.engine.account.total_funding_paid = account_state.get("total_funding_paid", 0.0)
+        trading_engine.account.available_cash = account_state["available_cash"]
+        trading_engine.account.total_return_percent = account_state.get("total_return_percent", 0.0)
+        trading_engine.account.sharpe_ratio = account_state.get("sharpe_ratio", 0.0)
+        trading_engine.account.trade_count = account_state.get("trade_count", 0)
+        trading_engine.account.total_fees_paid = account_state.get("total_fees_paid", 0.0)
+        trading_engine.account.total_funding_paid = account_state.get("total_funding_paid", 0.0)
 
         # Restore positions
         from ..trading.position import Position as TradingPosition
@@ -141,10 +159,10 @@ class BacktestEngine:
                 entry_fee=pos_dict.get("entry_fee", 0.0),
                 accumulated_funding=pos_dict.get("accumulated_funding", 0.0)
             )
-            self.engine.account.positions[pos.symbol] = pos
+            trading_engine.account.positions[pos.symbol] = pos
 
         # Restore trade history
-        self.engine.account.trade_log = checkpoint.get("trade_history", [])
+        trading_engine.account.trade_log = checkpoint.get("trade_history", [])
 
         # Restore LLM cache
         if self.use_llm_cache:
@@ -153,14 +171,21 @@ class BacktestEngine:
             self.llm_cache = {}
 
         # Initialize LLM agent (use current model, not checkpoint model)
-        self.llm_agent = LLMAgent(provider=self.model, validate_api_key=False)
+        llm_agent = LLMAgent(provider=self.model, temperature=self.temperature, validate_api_key=False)
+
+        # Initialize other components
+        prompt_gen = AlphaArenaPrompt()
+        indicators = TechnicalIndicators()
+
+        # Call parent constructor
+        super().__init__(llm_agent, trading_engine, prompt_gen, indicators)
 
         # Restore metadata
         metadata = checkpoint.get("metadata", {})
         self.iteration = metadata.get("total_iterations", 0)
         self.start_time = datetime.fromisoformat(checkpoint["checkpoint_date"])
 
-        logger.info(f"Restored from checkpoint:")
+        logger.info("Restored from checkpoint:")
         logger.info(f"  Account value: ${self.engine.account.account_value:,.2f}")
         logger.info(f"  Positions: {len(self.engine.account.positions)}")
         logger.info(f"  Trades: {len(self.engine.account.trade_log)}")
@@ -186,28 +211,32 @@ class BacktestEngine:
         logger.info("=" * 80)
 
         # Get timestamps for backtest period
-        timestamps = self.data_loader.get_timestamps(
+        self.timestamps = self.data_loader.get_timestamps(
             self.coins,
             self.start_date,
             self.end_date,
             interval=self.interval
         )
 
-        logger.info(f"Processing {len(timestamps)} timestamps...")
+        logger.info(f"Processing {len(self.timestamps)} timestamps...")
 
         # Event loop
-        for idx, timestamp in enumerate(timestamps):
+        for idx, timestamp in enumerate(self.timestamps):
+            self.current_idx = idx
             self.iteration += 1
 
             if self.iteration % 100 == 0:
                 logger.info(
-                    f"Iteration {self.iteration}/{len(timestamps)} "
+                    f"Iteration {self.iteration}/{len(self.timestamps)} "
                     f"({timestamp}) - "
                     f"Account: ${self.engine.account.account_value:,.2f}"
                 )
 
-            # Process this timestamp
-            self._process_timestamp(timestamp, idx, timestamps)
+            # Log the historical timestamp being processed
+            logger.info(f"[{timestamp.strftime('%Y-%m-%d %H:%M')}] Processing iteration {self.iteration}")
+
+            # Process this timestamp using parent's template method
+            self.process_iteration(timestamp)
 
             # Save intermediate checkpoint if requested
             if save_every_n_iterations and self.iteration % save_every_n_iterations == 0:
@@ -216,7 +245,7 @@ class BacktestEngine:
 
         # Save final checkpoint if requested
         if checkpoint_path:
-            self.save_checkpoint(checkpoint_path, timestamps[-1])
+            self.save_checkpoint(checkpoint_path, self.timestamps[-1])
 
             # Auto-generate analysis report after checkpoint is saved
             logger.info("Generating analysis report...")
@@ -236,18 +265,19 @@ class BacktestEngine:
 
         return results
 
-    def _process_timestamp(self, timestamp: datetime, idx: int, timestamps: list):
-        """Process a single timestamp
+    # Abstract method implementations
+
+    def _fetch_market_data(self, timestamp: datetime) -> Tuple[Dict, Dict]:
+        """
+        Fetch market data from historical files
 
         Args:
-            timestamp: Current timestamp to process
-            idx: Index of current timestamp in timestamps list
-            timestamps: Full list of timestamps (needed to detect final candle)
-        """
-        # Log the historical timestamp being processed
-        logger.info(f"[{timestamp.strftime('%Y-%m-%d %H:%M')}] Processing iteration {self.iteration}")
+            timestamp: Current timestamp to fetch data for
 
-        # 1. Load historical candles at this timestamp
+        Returns:
+            Tuple of (market_data dict, current_prices dict)
+        """
+        # Load historical candles at this timestamp
         # Adjust lookback based on interval
         if self.interval == '4h':
             # For 4h intervals, use longer lookback
@@ -268,9 +298,9 @@ class BacktestEngine:
 
         if not candles:
             logger.warning(f"No data at {timestamp}, skipping")
-            return
+            return {}, {}
 
-        # 2. Calculate indicators and build market data
+        # Calculate indicators and build market data
         market_data = {}
         current_prices = {}
 
@@ -339,45 +369,33 @@ class BacktestEngine:
                 rsi_14_4h=indicators_4h['rsi_14'].tail(10).tolist()
             )
 
-        if not market_data:
-            logger.warning(f"No valid market data at {timestamp}")
-            return
+        return market_data, current_prices
 
-        # 3. Update prices in trading engine
-        self.engine.account.update_prices(current_prices)
+    def _track_results(self, results: Dict, response: Any, market_data: Dict, timestamp: datetime):
+        """
+        Track results for backtest (periodic logging only)
 
-        # 4. Check exit conditions (stop-loss/profit-target)
-        exits = self.engine.check_exit_conditions(current_prices)
-        if exits:
-            for exit_info in exits:
-                logger.info(
-                    f"Auto-exit: {exit_info['symbol']} at ${exit_info['exit_price']:,.2f} "
-                    f"({exit_info['reason']})"
-                )
-
-        # 5. Build account info for prompt
-        account_info = AccountInfo(
-            total_return_percent=self.engine.account.total_return_percent,
-            available_cash=self.engine.account.available_cash,
-            account_value=self.engine.account.account_value,
-            positions=[self._position_to_prompt(pos) for pos in self.engine.account.positions.values()],
-            sharpe_ratio=self.engine.account.sharpe_ratio
-        )
-
-        # 6. Generate prompt
-        is_final_candle = (idx == len(timestamps) - 1)  # Check if this is the last timestamp
-        prompt = self.prompt_gen.generate_prompt(market_data, account_info, is_final_candle=is_final_candle)
-
-        # 7. Get LLM decision (with caching if enabled)
-        response = self._get_llm_decision(prompt, timestamp)
-
-        # 8. Execute trades
-        if response and response.trade_signals:
-            results = self.engine.execute_signals(response.trade_signals, current_prices, timestamp)
+        Args:
+            results: Trade execution results
+            response: LLM response
+            market_data: Market data used
+            timestamp: Current timestamp
+        """
+        # Backtest just logs execution results
+        if results:
             logger.debug(f"Trade execution results: {results}")
 
     def _get_llm_decision(self, prompt: str, timestamp: datetime):
-        """Get LLM decision with optional caching"""
+        """
+        Override to add LLM caching for backtest efficiency
+
+        Args:
+            prompt: The generated prompt
+            timestamp: Current timestamp
+
+        Returns:
+            LLM response or None if failed
+        """
         # Generate cache key
         prompt_hash = hashlib.md5(prompt.encode()).hexdigest()
 
@@ -387,43 +405,32 @@ class BacktestEngine:
             logger.debug(f"Using cached LLM response from {cached['timestamp']}")
             return cached['response']
 
-        # Make fresh API call
-        try:
-            response = self.llm_agent.generate_decision(prompt)
+        # Call parent method to make fresh API call
+        response = super()._get_llm_decision(prompt, timestamp)
 
-            # Cache response if enabled
-            if self.use_llm_cache:
-                self.llm_cache[prompt_hash] = {
-                    'response': response,
-                    'timestamp': timestamp.isoformat(),
-                    'model': self.model
-                }
+        # Cache response if enabled
+        if response and self.use_llm_cache:
+            self.llm_cache[prompt_hash] = {
+                'response': response,
+                'timestamp': timestamp.isoformat(),
+                'model': self.model
+            }
 
-            return response
+        return response
 
-        except Exception as e:
-            logger.error(f"LLM API call failed: {e}")
-            return None
+    def _is_final_timestamp(self, timestamp: datetime) -> bool:
+        """
+        Override to detect final timestamp in backtest
 
-    def _position_to_prompt(self, pos) -> PromptPosition:
-        """Convert trading position to prompt position"""
-        return PromptPosition(
-            symbol=pos.symbol,
-            quantity=pos.quantity,
-            entry_price=pos.entry_price,
-            current_price=pos.current_price,
-            liquidation_price=pos.liquidation_price,
-            unrealized_pnl=pos.unrealized_pnl,
-            leverage=pos.leverage,
-            exit_plan=pos.exit_plan,
-            confidence=pos.confidence,
-            risk_usd=pos.risk_usd,
-            notional_usd=pos.notional_usd,
-            sl_oid=pos.sl_oid,
-            tp_oid=pos.tp_oid,
-            wait_for_fill=pos.wait_for_fill,
-            entry_oid=pos.entry_oid
-        )
+        Args:
+            timestamp: Current timestamp
+
+        Returns:
+            True if this is the last timestamp in backtest
+        """
+        if self.timestamps is None or len(self.timestamps) == 0:
+            return False
+        return self.current_idx == len(self.timestamps) - 1
 
     def save_checkpoint(self, filepath: str, checkpoint_date: datetime):
         """Save current state to checkpoint"""
