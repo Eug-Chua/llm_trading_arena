@@ -207,7 +207,7 @@ class BacktestEngine:
                 )
 
             # Process this timestamp
-            self._process_timestamp(timestamp)
+            self._process_timestamp(timestamp, idx, timestamps)
 
             # Save intermediate checkpoint if requested
             if save_every_n_iterations and self.iteration % save_every_n_iterations == 0:
@@ -236,8 +236,14 @@ class BacktestEngine:
 
         return results
 
-    def _process_timestamp(self, timestamp: datetime):
-        """Process a single timestamp"""
+    def _process_timestamp(self, timestamp: datetime, idx: int, timestamps: list):
+        """Process a single timestamp
+
+        Args:
+            timestamp: Current timestamp to process
+            idx: Index of current timestamp in timestamps list
+            timestamps: Full list of timestamps (needed to detect final candle)
+        """
         # Log the historical timestamp being processed
         logger.info(f"[{timestamp.strftime('%Y-%m-%d %H:%M')}] Processing iteration {self.iteration}")
 
@@ -359,7 +365,8 @@ class BacktestEngine:
         )
 
         # 6. Generate prompt
-        prompt = self.prompt_gen.generate_prompt(market_data, account_info)
+        is_final_candle = (idx == len(timestamps) - 1)  # Check if this is the last timestamp
+        prompt = self.prompt_gen.generate_prompt(market_data, account_info, is_final_candle=is_final_candle)
 
         # 7. Get LLM decision (with caching if enabled)
         response = self._get_llm_decision(prompt, timestamp)
@@ -367,6 +374,7 @@ class BacktestEngine:
         # 8. Execute trades
         if response and response.trade_signals:
             results = self.engine.execute_signals(response.trade_signals, current_prices, timestamp)
+            logger.debug(f"Trade execution results: {results}")
 
     def _get_llm_decision(self, prompt: str, timestamp: datetime):
         """Get LLM decision with optional caching"""
