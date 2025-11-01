@@ -16,10 +16,15 @@ import pandas as pd
 from pathlib import Path
 from datetime import datetime, timedelta
 import json
-from src.data.hyperliquid_client import HyperliquidClient, ALPHA_ARENA_COINS
+from src.data.hyperliquid_client import HyperliquidClient
 from src.utils.logger import setup_logger
+from src.utils.config import load_config
 
 logger = setup_logger(__name__)
+
+# Load Alpha Arena coins from config
+config = load_config("config/trading_rules.yaml")
+ALPHA_ARENA_COINS = config['trading_rules']['symbols']
 
 
 class HistoricalDataCollector:
