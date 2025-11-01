@@ -1,5 +1,31 @@
 # LLM Model Configurations
 
+# Provider API Configurations
+providers:
+  deepseek:
+    base_url: "https://api.deepseek.com"
+    env_var: "DEEPSEEK_API_KEY"
+
+  openai:
+    base_url: "https://api.openai.com/v1"
+    env_var: "OPENAI_API_KEY"
+
+  anthropic:
+    env_var: "ANTHROPIC_API_KEY"
+    # Note: Anthropic uses native SDK, no base_url needed
+
+  google:
+    base_url: "https://generativelanguage.googleapis.com/v1beta"
+    env_var: "GOOGLE_API_KEY"
+
+  xai:
+    base_url: "https://api.x.ai/v1"
+    env_var: "XAI_API_KEY"
+
+  alibaba:
+    base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    env_var: "ALIBABA_API_KEY"
+
 models:
   deepseek:
     name: "DeepSeek Chat V3.1"
