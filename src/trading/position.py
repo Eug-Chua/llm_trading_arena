@@ -232,12 +232,13 @@ class Account:
     @property
     def account_value(self) -> float:
         """
-        Calculate total account value (cash + positions)
+        Calculate total account value (cash + collateral + unrealized P&L)
 
         Returns:
             Total account value in USD
         """
-        position_value = sum(pos.unrealized_pnl for pos in self.positions.values())
+        # Sum collateral locked in positions + their unrealized P&L
+        position_value = sum(pos.capital_used + pos.unrealized_pnl for pos in self.positions.values())
         return self.available_cash + position_value
 
     @property
