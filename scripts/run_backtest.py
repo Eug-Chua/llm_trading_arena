@@ -18,12 +18,12 @@ Usage:
         --end 2025-10-26 \\
         --checkpoint checkpoints/claude_oct26.pkl
 
-    # Non-determinism testing (temp=0.0 with --no-cache)
+    # Multiple trial testing (for statistical analysis)
     python scripts/run_backtest.py \\
-        --resume checkpoints/base_oct20.pkl \\
+        --start 2025-10-18 \\
         --end 2025-10-26 \\
-        --temperature 0.0 \\
-        --no-cache \\
+        --model anthropic \\
+        --temperature 0.7 \\
         --run-id 1
 """
 
@@ -55,8 +55,8 @@ Examples:
   # Resume from checkpoint
   python scripts/run_backtest.py --resume checkpoints/base_oct20.pkl --end 2025-10-26
 
-  # Non-determinism testing (no cache)
-  python scripts/run_backtest.py --resume checkpoints/base.pkl --no-cache --run-id 1
+  # Multiple trials for statistical analysis
+  python scripts/run_backtest.py --start 2025-10-18 --end 2025-10-26 --run-id 1
         """
     )
 
@@ -101,9 +101,9 @@ Examples:
     parser.add_argument(
         '--interval',
         type=str,
-        default='3m',
+        default='4h',
         choices=['1m', '3m', '4h'],
-        help='Candle interval for decision-making (default: 3m)'
+        help='Candle interval for decision-making (default: 4h)'
     )
 
     # Capital
@@ -131,18 +131,11 @@ Examples:
         help='Save intermediate checkpoint every N iterations'
     )
 
-    # LLM cache control
-    parser.add_argument(
-        '--no-cache',
-        action='store_true',
-        help='Disable LLM response caching (for non-determinism testing)'
-    )
-
-    # Non-determinism testing
+    # Multiple trial testing
     parser.add_argument(
         '--run-id',
         type=int,
-        help='Run ID for non-determinism testing'
+        help='Run ID for multiple trial testing (for statistical analysis)'
     )
 
     # Data directories
@@ -191,7 +184,6 @@ Examples:
     logger.info(f"Coins: {', '.join(args.coins)}")
     logger.info(f"Interval: {args.interval}")
     logger.info(f"Starting capital: ${args.capital:,.2f}")
-    logger.info(f"LLM cache: {'disabled' if args.no_cache else 'enabled'}")
     if args.run_id is not None:
         logger.info(f"Run ID: {args.run_id}")
     if args.resume:
@@ -209,7 +201,6 @@ Examples:
             model=args.model,
             starting_capital=args.capital,
             checkpoint_path=args.resume,
-            use_llm_cache=not args.no_cache,
             run_id=args.run_id,
             data_dir=args.data_dir,
             checkpoint_dir=args.checkpoint_dir,
@@ -252,7 +243,7 @@ Examples:
         logger.info(f"\n⚙️  EXECUTION")
         logger.info(f"  Model:               {results['model']}")
         logger.info(f"  Iterations:          {results['iterations']:>8}")
-        logger.info(f"  LLM Cache Size:      {results['llm_cache_size']:>8}")
+        logger.info(f"  LLM Responses:       {results['llm_responses_tracked']:>8}")
         if results.get('run_id') is not None:
             logger.info(f"  Run ID:              {results['run_id']:>8}")
 
