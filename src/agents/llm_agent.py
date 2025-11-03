@@ -15,9 +15,13 @@ import yaml
 from pathlib import Path
 from typing import Optional, Dict, Any
 from openai import OpenAI
+from dotenv import load_dotenv
 
 from .base_agent import BaseLLMAgent
 from ..utils.logger import setup_logger
+
+# Load environment variables from .env file
+load_dotenv()
 
 logger = setup_logger(__name__)
 
