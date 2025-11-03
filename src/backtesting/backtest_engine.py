@@ -7,15 +7,14 @@ Inherits common orchestration logic from TradingOrchestrator.
 Responsibilities:
 - Load historical market data from parquet files
 - Manage backtest state (timestamps, iteration count)
-- Cache LLM responses for efficiency
 - Save/load checkpoints for resuming backtests
 - Generate analysis reports
 """
 
-import hashlib
 from datetime import datetime
 from typing import Dict, List, Optional, Any, Tuple
 from pathlib import Path
+import time
 
 from .historical_loader import HistoricalDataLoader
 from .checkpoint_manager import CheckpointManager
@@ -36,8 +35,7 @@ class BacktestEngine(TradingOrchestrator):
     Features:
     - Event-driven replay of historical market data
     - Checkpoint save/load for resuming backtests
-    - LLM response caching for efficiency
-    - Non-determinism testing support
+    - Multiple trial support for statistical analysis
     """
 
     def __init__(
@@ -48,7 +46,6 @@ class BacktestEngine(TradingOrchestrator):
         model: str = "claude",
         starting_capital: float = 10000.0,
         checkpoint_path: Optional[str] = None,
-        use_llm_cache: bool = True,
         run_id: Optional[int] = None,
         data_dir: str = "data/historical",
         checkpoint_dir: str = "results/checkpoints",
@@ -65,8 +62,7 @@ class BacktestEngine(TradingOrchestrator):
             model: LLM model to use ('claude', 'gpt-4o', 'deepseek')
             starting_capital: Starting capital in USD
             checkpoint_path: Optional checkpoint to resume from
-            use_llm_cache: Whether to cache LLM responses
-            run_id: Optional run identifier for non-determinism testing
+            run_id: Optional run identifier for statistical analysis trials
             data_dir: Directory with historical data
             checkpoint_dir: Directory for checkpoints
             interval: Decision interval ('1m', '3m', '4h')
@@ -77,7 +73,6 @@ class BacktestEngine(TradingOrchestrator):
         self.end_date = end_date
         self.coins = coins
         self.model = model
-        self.use_llm_cache = use_llm_cache
         self.run_id = run_id
         self.interval = interval
         self.temperature = temperature
@@ -86,8 +81,8 @@ class BacktestEngine(TradingOrchestrator):
         self.data_loader = HistoricalDataLoader(data_dir)
         self.checkpoint_manager = CheckpointManager(checkpoint_dir)
 
-        # LLM response cache (backtest-specific)
-        self.llm_cache: Dict[str, Any] = {}
+        # LLM response tracking (for reasoning export, not for caching)
+        self.llm_responses: List[Dict[str, Any]] = []
 
         # Backtest state tracking
         self.timestamps: Optional[List[datetime]] = None
@@ -115,7 +110,6 @@ class BacktestEngine(TradingOrchestrator):
         logger.info(f"  Model: {model}")
         logger.info(f"  Interval: {interval}")
         logger.info(f"  Starting capital: ${starting_capital:,.2f}")
-        logger.info(f"  LLM cache: {'enabled' if use_llm_cache else 'disabled'}")
         if run_id is not None:
             logger.info(f"  Run ID: {run_id}")
         if checkpoint_path:
@@ -125,7 +119,7 @@ class BacktestEngine(TradingOrchestrator):
         """Load state from checkpoint"""
         checkpoint = self.checkpoint_manager.load_checkpoint(
             checkpoint_path,
-            use_llm_cache=self.use_llm_cache
+            use_llm_cache=False
         )
 
         # Restore account state
@@ -163,12 +157,6 @@ class BacktestEngine(TradingOrchestrator):
 
         # Restore trade history
         trading_engine.account.trade_log = checkpoint.get("trade_history", [])
-
-        # Restore LLM cache
-        if self.use_llm_cache:
-            self.llm_cache = checkpoint.get("llm_cache", {})
-        else:
-            self.llm_cache = {}
 
         # Initialize LLM agent (use current model, not checkpoint model)
         llm_agent = LLMAgent(provider=self.model, temperature=self.temperature, validate_api_key=False)
@@ -238,6 +226,11 @@ class BacktestEngine(TradingOrchestrator):
             # Process this timestamp using parent's template method
             self.process_iteration(timestamp)
 
+            # Add rate limiting delay to avoid hitting API limits
+            # Anthropic rate limits: ~10 requests/min for free tier
+            # Sleep 6 seconds between iterations to stay under 10 req/min
+            time.sleep(6)
+
             # Save intermediate checkpoint if requested
             if save_every_n_iterations and self.iteration % save_every_n_iterations == 0:
                 temp_checkpoint = f"temp_checkpoint_iter{self.iteration}.pkl"
@@ -280,20 +273,21 @@ class BacktestEngine(TradingOrchestrator):
         # Load historical candles at this timestamp
         # Adjust lookback based on interval
         if self.interval == '4h':
-            # For 4h intervals, use longer lookback
+            # For 4h intervals, use minimal lookback to match available data
+            # Need at least 50 candles for EMA-50, use 80 hours = 20 candles minimum
             candles = self.data_loader.get_all_candles_at_time(
                 self.coins,
                 timestamp,
                 lookback_3m=0,  # Don't need 3m data
-                lookback_4h=720  # 30 days of 4h candles
+                lookback_4h=80  # ~3.3 days (80 hours = 20 candles of 4h data)
             )
         else:
-            # For 3m/1m intervals, use default
+            # For 3m/1m intervals, use reduced lookback to match available data
             candles = self.data_loader.get_all_candles_at_time(
                 self.coins,
                 timestamp,
-                lookback_3m=3,  # 3 hours
-                lookback_4h=240  # 10 days
+                lookback_3m=3,  # 3 hours (60 candles of 3m data)
+                lookback_4h=100  # ~4 days (100 hours = 25 candles of 4h data)
             )
 
         if not candles:
@@ -385,9 +379,9 @@ class BacktestEngine(TradingOrchestrator):
         if results:
             logger.debug(f"Trade execution results: {results}")
 
-    def _get_llm_decision(self, prompt: str, timestamp: datetime):
+    def _get_llm_decision(self, prompt: str, timestamp: datetime) -> Optional[Any]:
         """
-        Override to add LLM caching for backtest efficiency
+        Override to track LLM responses for reasoning export (no caching)
 
         Args:
             prompt: The generated prompt
@@ -396,25 +390,17 @@ class BacktestEngine(TradingOrchestrator):
         Returns:
             LLM response or None if failed
         """
-        # Generate cache key
-        prompt_hash = hashlib.md5(prompt.encode()).hexdigest()
-
-        # Check cache if enabled
-        if self.use_llm_cache and prompt_hash in self.llm_cache:
-            cached = self.llm_cache[prompt_hash]
-            logger.debug(f"Using cached LLM response from {cached['timestamp']}")
-            return cached['response']
-
-        # Call parent method to make fresh API call
+        # Call parent method to make fresh API call (no caching)
         response = super()._get_llm_decision(prompt, timestamp)
 
-        # Cache response if enabled
-        if response and self.use_llm_cache:
-            self.llm_cache[prompt_hash] = {
+        # Track response for reasoning export (not for caching)
+        if response:
+            self.llm_responses.append({
                 'response': response,
                 'timestamp': timestamp.isoformat(),
-                'model': self.model
-            }
+                'model': self.model,
+                'iteration': self.iteration
+            })
 
         return response
 
@@ -467,8 +453,8 @@ class BacktestEngine(TradingOrchestrator):
             positions=positions,
             checkpoint_date=checkpoint_date,
             metadata=metadata,
-            llm_cache=self.llm_cache if self.use_llm_cache else None,
-            include_llm_cache=self.use_llm_cache
+            llm_cache=None,
+            include_llm_cache=False
         )
 
         # Also save JSON metadata for easy viewing
@@ -480,13 +466,12 @@ class BacktestEngine(TradingOrchestrator):
             "account": account_state,
             "positions": positions,
             "trade_history": self.engine.account.trade_log,
-            "metadata": metadata,
-            "llm_cache": self.llm_cache if self.use_llm_cache else {}
+            "metadata": metadata
         }
         self.checkpoint_manager.save_metadata_json(json_path, checkpoint_data)
 
-        # Export LLM reasoning to readable markdown files
-        if self.use_llm_cache and self.llm_cache:
+        # Export LLM reasoning if we have responses
+        if self.llm_responses:
             self._export_llm_reasoning(filepath)
 
     def _export_llm_reasoning(self, checkpoint_path: str):
@@ -500,8 +485,8 @@ class BacktestEngine(TradingOrchestrator):
 
         logger.info(f"Exporting LLM reasoning to {reasoning_file}")
 
-        # Sort responses by timestamp
-        sorted_responses = sorted(self.llm_cache.items(), key=lambda x: x[1]['timestamp'])
+        # Responses are already in chronological order (appended as we go)
+        sorted_responses = self.llm_responses
 
         # Build structured data
         reasoning_data = {
@@ -511,7 +496,7 @@ class BacktestEngine(TradingOrchestrator):
                 "end_date": self.end_date,
                 "model": self.model,
                 "coins": self.coins,
-                "interval": self.interval if hasattr(self, 'interval') else None,
+                "interval": self.interval,
                 "total_iterations": len(sorted_responses),
                 "exported_at": datetime.now().isoformat()
             },
@@ -519,7 +504,7 @@ class BacktestEngine(TradingOrchestrator):
         }
 
         # Export each iteration
-        for i, (prompt_hash, response_data) in enumerate(sorted_responses, 1):
+        for i, response_data in enumerate(sorted_responses, 1):
             timestamp = response_data['timestamp']
             model = response_data['model']
             agent_response = response_data['response']
@@ -622,5 +607,5 @@ class BacktestEngine(TradingOrchestrator):
             "start_date": self.start_date,
             "end_date": self.end_date,
             "iterations": self.iteration,
-            "llm_cache_size": len(self.llm_cache)
+            "llm_responses_tracked": len(self.llm_responses)
         }
