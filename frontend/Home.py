@@ -99,8 +99,25 @@ def create_performance_chart(checkpoints_data):
 
     colors = ['#00d4ff', '#ff6b6b', '#4ecdc4', '#95e1d3']  # Colors for different models
 
+    # Track date range from metadata
+    min_date = None
+    max_date = None
+
     for idx, (model_name, checkpoint) in enumerate(checkpoints_data.items()):
         trade_log = checkpoint.get('trade_history', [])
+        metadata = checkpoint.get('metadata', {})
+
+        # Update date range from metadata
+        if metadata.get('start_date'):
+            from datetime import datetime
+            start_date = datetime.fromisoformat(metadata['start_date'])
+            if min_date is None or start_date < min_date:
+                min_date = start_date
+        if metadata.get('end_date'):
+            from datetime import datetime
+            end_date = datetime.fromisoformat(metadata['end_date'])
+            if max_date is None or end_date > max_date:
+                max_date = end_date
 
         # Build equity curve by calculating cumulative P&L
         timestamps = []
@@ -211,7 +228,8 @@ def create_performance_chart(checkpoints_data):
         xaxis=dict(
             showgrid=True,
             gridwidth=1,
-            gridcolor='rgba(128, 128, 128, 0.2)'
+            gridcolor='rgba(128, 128, 128, 0.2)',
+            range=[min_date, max_date] if min_date and max_date else None
         ),
         yaxis=dict(
             showgrid=True,
@@ -219,6 +237,158 @@ def create_performance_chart(checkpoints_data):
             gridcolor='rgba(128, 128, 128, 0.2)',
             tickprefix='$',
             tickformat=',.0f'
+        )
+    )
+
+    return fig
+
+
+def create_portfolio_allocation_chart(checkpoint, model_name):
+    """
+    Create stacked area chart showing portfolio allocation over time
+
+    Shows how capital is distributed across coins and cash throughout the backtest
+    """
+    trade_log = checkpoint.get('trade_history', [])
+    account = checkpoint['account']
+    starting_capital = account.get('starting_capital', 10000)
+
+    if not trade_log:
+        return None
+
+    # Track portfolio state at each timestamp
+    timestamps = []
+    cash_values = []
+    coin_allocations = {}  # {coin: [values over time]}
+
+    # Initialize
+    coins = ['BTC', 'ETH', 'SOL', 'BNB', 'XRP', 'DOGE']
+    for coin in coins:
+        coin_allocations[coin] = []
+
+    # Track current state
+    current_cash = starting_capital
+    open_positions = {}  # {coin: {'quantity': X, 'entry_price': Y, 'notional': Z}}
+
+    # Add starting point
+    timestamps.append(trade_log[0]['timestamp'])
+    cash_values.append(current_cash)
+    for coin in coins:
+        coin_allocations[coin].append(0)
+
+    # Process each trade
+    for trade in trade_log:
+        ts = trade['timestamp']
+        symbol = trade.get('symbol')
+        action = trade['action']
+
+        if action == 'BUY':
+            # Open position
+            quantity = trade.get('quantity', 0)
+            price = trade.get('price', 0)
+            cost = trade.get('cost', 0)
+            leverage = trade.get('leverage', 1)
+
+            # Notional value (total position value)
+            notional = quantity * price
+
+            # Capital used (margin)
+            capital_used = notional / leverage
+
+            open_positions[symbol] = {
+                'quantity': quantity,
+                'entry_price': price,
+                'notional': notional,
+                'capital_used': capital_used,
+                'current_price': price
+            }
+
+            # Update cash (subtract capital used + fees)
+            current_cash -= capital_used
+
+        elif action == 'CLOSE':
+            # Close position
+            pnl = trade.get('net_pnl', 0)
+            symbol = trade.get('symbol')
+
+            if symbol in open_positions:
+                # Return capital + P&L
+                current_cash += open_positions[symbol]['capital_used'] + pnl
+                del open_positions[symbol]
+
+        # Record snapshot at this timestamp
+        timestamps.append(ts)
+        cash_values.append(current_cash)
+
+        for coin in coins:
+            if coin in open_positions:
+                # Use current market value of position
+                pos = open_positions[coin]
+                coin_allocations[coin].append(pos['capital_used'])
+            else:
+                coin_allocations[coin].append(0)
+
+    # Create stacked area chart
+    fig = go.Figure()
+
+    # Color scheme for coins
+    coin_colors = {
+        'BTC': '#F7931A',  # Bitcoin orange
+        'ETH': '#627EEA',  # Ethereum blue
+        'SOL': '#14F195',  # Solana green
+        'BNB': '#F3BA2F',  # Binance yellow
+        'XRP': '#23292F',  # XRP black
+        'DOGE': '#C2A633', # Doge gold
+        'CASH': '#888888'  # Cash gray
+    }
+
+    # Add cash first (bottom layer)
+    fig.add_trace(go.Scatter(
+        x=timestamps,
+        y=cash_values,
+        name='Cash',
+        mode='lines',
+        line=dict(width=0.5, color=coin_colors['CASH']),
+        fillcolor='rgba(136, 136, 136, 0.4)',
+        fill='tozeroy',
+        stackgroup='one',
+        hovertemplate='Cash: $%{y:,.2f}<extra></extra>'
+    ))
+
+    # Add each coin
+    for coin in coins:
+        if any(v > 0 for v in coin_allocations[coin]):
+            color = coin_colors.get(coin, '#888888')
+            # Convert hex to rgba
+            r = int(color[1:3], 16)
+            g = int(color[3:5], 16)
+            b = int(color[5:7], 16)
+
+            fig.add_trace(go.Scatter(
+                x=timestamps,
+                y=coin_allocations[coin],
+                name=coin,
+                mode='lines',
+                line=dict(width=0.5, color=color),
+                fillcolor=f'rgba({r}, {g}, {b}, 0.6)',
+                stackgroup='one',
+                hovertemplate=f'{coin}: $%{{y:,.2f}}<extra></extra>'
+            ))
+
+    fig.update_layout(
+        title=f'{model_name} - Portfolio Allocation Over Time',
+        xaxis_title='Date',
+        yaxis_title='Capital Allocation (USD)',
+        template='plotly_dark',
+        height=500,
+        hovermode='x unified',
+        yaxis=dict(tickprefix='$', tickformat=',.0f'),
+        legend=dict(
+            orientation='h',
+            yanchor='bottom',
+            y=1.02,
+            xanchor='right',
+            x=1
         )
     )
 
@@ -367,6 +537,31 @@ def main():
             st.markdown(f"**Sharpe:** {metrics['sharpe_ratio']:.2f}")
             st.markdown(f"**Win Rate:** {metrics['win_rate']:.1f}%")
             st.markdown(f"**Trades:** {metrics['total_trades']}")
+
+    # Portfolio allocation comparison
+    st.markdown("---")
+    st.subheader("Portfolio Allocation Behavior")
+    st.markdown("*Comparing how each model allocates capital across coins and cash over time*")
+
+    # Create side-by-side allocation charts
+    if len(existing_checkpoints) == 2:
+        cols = st.columns(2)
+
+        for idx, (model_name, checkpoint) in enumerate(existing_checkpoints.items()):
+            with cols[idx]:
+                allocation_chart = create_portfolio_allocation_chart(checkpoint, model_name)
+                if allocation_chart:
+                    st.plotly_chart(allocation_chart, use_container_width=True)
+                else:
+                    st.warning(f"No trade data available for {model_name}")
+    else:
+        # Single model or > 2 models - show in single column
+        for model_name, checkpoint in existing_checkpoints.items():
+            allocation_chart = create_portfolio_allocation_chart(checkpoint, model_name)
+            if allocation_chart:
+                st.plotly_chart(allocation_chart, use_container_width=True)
+            else:
+                st.warning(f"No trade data available for {model_name}")
 
 
 if __name__ == "__main__":
