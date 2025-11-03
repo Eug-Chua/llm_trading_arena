@@ -31,11 +31,11 @@ class TradingOrchestrator(ABC):
 
     def __init__(
         self,
-        llm_agent,
-        trading_engine,
-        prompt_gen,
-        indicators
-    ):
+        llm_agent: Any,
+        trading_engine: Any,
+        prompt_gen: Any,
+        indicators: Any
+    ) -> None:
         """
         Initialize orchestrator with dependencies
 
@@ -150,7 +150,7 @@ class TradingOrchestrator(ABC):
         response: Any,
         market_data: Dict,
         timestamp: datetime
-    ):
+    ) -> None:
         """
         Track/log iteration results
 
@@ -210,13 +210,14 @@ class TradingOrchestrator(ABC):
             Formatted prompt string
         """
         is_final = self._is_final_timestamp(timestamp)
-        return self.prompt_gen.generate_prompt(
+        prompt: str = self.prompt_gen.generate_prompt(
             market_data,
             account_info,
             is_final_candle=is_final
         )
+        return prompt
 
-    def _get_llm_decision(self, prompt: str, timestamp: datetime):
+    def _get_llm_decision(self, prompt: str, timestamp: datetime) -> Optional[Any]:
         """
         Get LLM trading decision
 
@@ -236,7 +237,7 @@ class TradingOrchestrator(ABC):
             logger.error(f"LLM call failed at {timestamp}: {e}")
             return None
 
-    def _log_exits(self, exits: List[Dict]):
+    def _log_exits(self, exits: List[Dict]) -> None:
         """
         Log automatic exits
 
@@ -253,7 +254,7 @@ class TradingOrchestrator(ABC):
                     f"${exit_info['exit_price']:,.2f} ({exit_info['reason']})"
                 )
 
-    def _position_to_prompt(self, position) -> PromptPosition:
+    def _position_to_prompt(self, position: Any) -> PromptPosition:
         """
         Convert Position to PromptPosition
 
