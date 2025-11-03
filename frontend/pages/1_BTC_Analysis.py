@@ -399,6 +399,26 @@ def main():
         st.code(f"python scripts/collect_historical_data.py --coins BTC --interval {interval}")
         return
 
+    # Filter data to backtest date range from metadata
+    from datetime import datetime
+    min_date = None
+    max_date = None
+
+    for checkpoint in checkpoints.values():
+        metadata = checkpoint.get('metadata', {})
+        if metadata.get('start_date'):
+            start_date = datetime.fromisoformat(metadata['start_date'])
+            if min_date is None or start_date < min_date:
+                min_date = start_date
+        if metadata.get('end_date'):
+            end_date = datetime.fromisoformat(metadata['end_date'])
+            if max_date is None or end_date > max_date:
+                max_date = end_date
+
+    # Filter dataframe to backtest period
+    if min_date and max_date:
+        df = df[(df['timestamp'] >= min_date) & (df['timestamp'] <= max_date)]
+
     # Load reasoning data (match checkpoint filenames)
     reasoning_data = {}
     if anthropic_files and 'Anthropic' in checkpoints:
