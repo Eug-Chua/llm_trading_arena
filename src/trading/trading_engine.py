@@ -362,7 +362,7 @@ class TradingEngine:
         logger.info(f"CLOSED {symbol}: {position.quantity} @ ${current_price:.2f}, Net P&L: ${net_pnl:.2f} (fee: ${exit_fee:.2f}), Reason: {reason}")
         return f"EXECUTED: Closed position (Net P&L ${net_pnl:.2f}, {reason})"
 
-    def update_funding_rates(self, funding_rates: Dict[str, float]):
+    def update_funding_rates(self, funding_rates: Dict[str, float]) -> None:
         """
         Update funding rates and apply funding costs to open positions
 
