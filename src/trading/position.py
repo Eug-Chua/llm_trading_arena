@@ -63,11 +63,15 @@ class Position:
         """
         Calculate unrealized profit/loss (including fees and funding)
 
+        For leveraged positions, PnL is based on the notional value change,
+        NOT multiplied by leverage. Leverage only affects capital requirements.
+
         Returns:
             P&L in USD (net of fees and funding costs)
         """
         price_diff = self.current_price - self.entry_price
-        gross_pnl = price_diff * self.quantity * self.leverage
+        # PnL = price change × quantity (NOT × leverage)
+        gross_pnl = price_diff * self.quantity
 
         # Subtract entry fee and accumulated funding costs
         net_pnl = gross_pnl - self.entry_fee - self.accumulated_funding
@@ -97,7 +101,7 @@ class Position:
             'invalidation_condition': self.invalidation_condition
         }
 
-    def update_price(self, new_price: float):
+    def update_price(self, new_price: float) -> None:
         """
         Update current price
 
@@ -106,7 +110,7 @@ class Position:
         """
         self.current_price = new_price
 
-    def apply_funding_cost(self, funding_rate: float, current_time: Optional[datetime] = None):
+    def apply_funding_cost(self, funding_rate: float, current_time: Optional[datetime] = None) -> None:
         """
         Apply funding rate cost to position
 
@@ -251,11 +255,11 @@ class Account:
         """
         return self.account_value - self.starting_capital
 
-    def update_return_percent(self):
+    def update_return_percent(self) -> None:
         """Update total return percentage"""
         self.total_return_percent = (self.total_return / self.starting_capital) * 100
 
-    def update_performance_metrics(self):
+    def update_performance_metrics(self) -> None:
         """
         Update all performance metrics including Sharpe ratio
 
@@ -318,7 +322,7 @@ class Account:
         """
         return self.positions.get(symbol)
 
-    def add_position(self, position: Position):
+    def add_position(self, position: Position) -> None:
         """
         Add a new position
 
@@ -344,7 +348,7 @@ class Account:
             return pos
         return None
 
-    def update_prices(self, prices: Dict[str, float]):
+    def update_prices(self, prices: Dict[str, float]) -> None:
         """
         Update current prices for all positions
 

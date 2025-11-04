@@ -91,7 +91,7 @@ class PerformanceTracker:
             return 0.0
 
         # Sharpe ratio per trade
-        sharpe = (mean_return - self.risk_free_rate) / std_return
+        sharpe: float = float((mean_return - self.risk_free_rate) / std_return)
 
         # Annualize: Assume ~365 trading days per year for crypto
         # If we have N trades over T days, annualization factor = sqrt(365 / avg_days_per_trade)
@@ -103,7 +103,7 @@ class PerformanceTracker:
 
             if days_elapsed > 0:
                 avg_days_per_trade = days_elapsed / len(closed_trades)
-                annualization_factor = np.sqrt(365 / avg_days_per_trade)
+                annualization_factor = float(np.sqrt(365 / avg_days_per_trade))
                 sharpe *= annualization_factor
 
         return sharpe
@@ -208,7 +208,8 @@ class PerformanceTracker:
             # No losing trades = infinite profit factor (cap at 999)
             return 999.0 if gross_profit > 0 else 0.0
 
-        return gross_profit / gross_loss
+        profit_factor: float = float(gross_profit / gross_loss)
+        return profit_factor
 
     def calculate_average_trade_pnl(self, trade_log: List[Dict[str, Any]]) -> Dict[str, float]:
         """
@@ -275,6 +276,11 @@ class PerformanceTracker:
         winning_trades = sum(1 for t in closed_trades if t['net_pnl'] > 0)
         losing_trades = sum(1 for t in closed_trades if t['net_pnl'] < 0)
 
+        # Calculate confidence metrics
+        confidences = [t['confidence'] for t in closed_trades if 'confidence' in t]
+        avg_confidence = np.mean(confidences) if confidences else 0.0
+        median_confidence = np.median(confidences) if confidences else 0.0
+
         # Calculate total return
         total_return = current_value - starting_capital
         total_return_pct = (total_return / starting_capital) * 100
@@ -307,6 +313,10 @@ class PerformanceTracker:
             'avg_trade_pnl': avg_pnl['avg_pnl'],
             'avg_winning_trade': avg_pnl['avg_win'],
             'avg_losing_trade': avg_pnl['avg_loss'],
+
+            # Confidence metrics
+            'avg_confidence': avg_confidence,
+            'median_confidence': median_confidence,
 
             # Costs
             'total_fees_paid': total_fees_paid,
