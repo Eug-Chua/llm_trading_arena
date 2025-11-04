@@ -159,7 +159,7 @@ def create_performance_chart(checkpoints_data):
             mode='lines+markers',
             name=model_name,
             line=dict(color=colors[idx % len(colors)], width=3),
-            marker=dict(size=6),
+            marker=dict(size=10),
             hovertemplate=hover_template
         ))
 
@@ -190,7 +190,7 @@ def create_performance_chart(checkpoints_data):
                     size=20,
                     color=colors[idx % len(colors)],
                     symbol='diamond',
-                    line=dict(color='white', width=2)
+                    line=dict(color='white', width=1)
                 ),
                 hovertemplate=endpoint_hover,
                 showlegend=False
@@ -453,8 +453,9 @@ def main():
     # Load checkpoints
     checkpoint_dir = project_root / "results" / "checkpoints"
 
-    # Get all available checkpoint files
-    available_checkpoints = sorted([f.name for f in checkpoint_dir.glob("*.pkl")])
+    # Get all available checkpoint files with natural sort
+    from frontend.utils.checkpoint_utils import natural_sort_key
+    available_checkpoints = sorted([f.name for f in checkpoint_dir.glob("*.pkl")], key=natural_sort_key)
 
     if not available_checkpoints:
         st.error("❌ No checkpoint files found in results/checkpoints/")
