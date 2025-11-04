@@ -34,8 +34,12 @@ def get_coin_trades(checkpoint, coin: str):
     return [t for t in trade_log if t.get('symbol') == coin]
 
 
-def create_candlestick_chart(df, trades_by_model, show_indicators, selected_models, coin_symbol, interval='4h'):
-    """Create interactive candlestick chart with indicators and trades"""
+def create_candlestick_chart(df, trades_by_model, show_indicators, selected_models, coin_symbol, interval='4h', highlighted_timestamp=None):
+    """Create interactive candlestick chart with indicators and trades
+
+    Args:
+        highlighted_timestamp: Optional timestamp to highlight on the chart
+    """
 
     # Load indicator configuration
     config = load_indicator_config()
@@ -133,6 +137,21 @@ def create_candlestick_chart(df, trades_by_model, show_indicators, selected_mode
                 for t in buys
             ]
 
+            # Calculate marker sizes and opacity - highlight selected timestamp
+            marker_sizes = []
+            marker_opacities = []
+            for t in buys:
+                # Normalize timestamps for comparison (convert both to ISO format strings)
+                trade_ts = pd.to_datetime(t['timestamp']).isoformat()
+                highlighted_ts = pd.to_datetime(highlighted_timestamp).isoformat() if highlighted_timestamp else None
+
+                if highlighted_ts and trade_ts == highlighted_ts:
+                    marker_sizes.append(30)  # Larger size for highlighted
+                    marker_opacities.append(0.9)
+                else:
+                    marker_sizes.append(12)  # Normal size
+                    marker_opacities.append(0.7)
+
             fig.add_trace(
                 go.Scatter(
                     x=buy_times,
@@ -140,8 +159,10 @@ def create_candlestick_chart(df, trades_by_model, show_indicators, selected_mode
                     mode='markers',
                     name=f'{model_name} - Entry',
                     marker=dict(
-                        size=12,
+                        size=marker_sizes,
                         color=dot_color,
+                        opacity=marker_opacities,
+                        line=dict(width=0)  # No border
                     ),
                     hovertext=buy_hover,
                     hoverinfo='text'
@@ -158,10 +179,25 @@ def create_candlestick_chart(df, trades_by_model, show_indicators, selected_mode
                 f"<b>{model_name} - CLOSE</b><br>" +
                 f"Exit Price: ${t['exit_price']:,.2f}<br>" +
                 f"Entry Price: ${t.get('entry_price', 0):,.2f}<br>" +
-                f"P&L: ${t['net_pnl']:,.2f}<br>" +
-                f"Reason: {t.get('reason', 'N/A')}"
+                f"P&L: ${t['net_pnl']:,.2f}<br>"
+                # f"Reason: {t.get('reason', 'N/A')}"
                 for t in closes
             ]
+
+            # Calculate marker sizes and opacity - highlight selected timestamp
+            close_marker_sizes = []
+            close_marker_opacities = []
+            for t in closes:
+                # Normalize timestamps for comparison (convert both to ISO format strings)
+                trade_ts = pd.to_datetime(t['timestamp']).isoformat()
+                highlighted_ts = pd.to_datetime(highlighted_timestamp).isoformat() if highlighted_timestamp else None
+
+                if highlighted_ts and trade_ts == highlighted_ts:
+                    close_marker_sizes.append(30)  # Larger size for highlighted
+                    close_marker_opacities.append(0.9)  # Less opaque for highlighted
+                else:
+                    close_marker_sizes.append(12)  # Normal size
+                    close_marker_opacities.append(0.7)  # Full opacity
 
             fig.add_trace(
                 go.Scatter(
@@ -170,8 +206,10 @@ def create_candlestick_chart(df, trades_by_model, show_indicators, selected_mode
                     mode='markers',
                     name=f'{model_name} - Exit',
                     marker=dict(
-                        size=12,
-                        color=dot_color
+                        size=close_marker_sizes,
+                        color=dot_color,
+                        opacity=close_marker_opacities,
+                        line=dict(width=0)  # No border
                     ),
                     hovertext=close_hover,
                     hoverinfo='text',
@@ -267,13 +305,21 @@ def create_candlestick_chart(df, trades_by_model, show_indicators, selected_mode
     return fig
 
 
-def render_llm_reasoning_sidebar(reasoning_data, coin, selected_models):
-    """Render LLM reasoning in sidebar"""
+def render_llm_reasoning_sidebar(reasoning_data, coin, selected_models, trades_by_model=None):
+    """Render LLM reasoning in sidebar with click-to-highlight functionality
+
+    Args:
+        trades_by_model: Dict mapping model names to their trades (for checking if highlight is possible)
+    """
     st.sidebar.header(f"Model Chat - {coin}")
 
     if not reasoning_data:
         st.sidebar.info("No reasoning data available")
         return
+
+    # Initialize session state for highlighted timestamp
+    if 'highlighted_timestamp' not in st.session_state:
+        st.session_state.highlighted_timestamp = None
 
     # Filter iterations for this coin
     for model_name, model_reasoning in reasoning_data.items():
@@ -295,14 +341,35 @@ def render_llm_reasoning_sidebar(reasoning_data, coin, selected_models):
                 coin_iterations.append(iteration)
 
         # Display count of iterations being shown (not total)
-        num_showing = min(len(coin_iterations), 5)
         st.sidebar.markdown(f"### {model_display_name}")
-        st.sidebar.markdown(f"*{num_showing} of {len(coin_iterations)} decisions*")
+        st.sidebar.markdown(f"*{len(coin_iterations)} total decisions*")
 
-        # Show latest 5 iterations
-        for iteration in coin_iterations[-5:]:
+        # Get trade timestamps for this model (to check if highlight is possible)
+        model_trade_timestamps = set()
+        if trades_by_model:
+            # Find matching model in trades_by_model (case-insensitive)
+            matching_model = None
+            for trade_model_name in trades_by_model.keys():
+                if trade_model_name.lower() == model_display_name.lower():
+                    matching_model = trade_model_name
+                    break
+
+            if matching_model:
+                for trade in trades_by_model[matching_model]:
+                    trade_ts = pd.to_datetime(trade['timestamp']).isoformat()
+                    model_trade_timestamps.add(trade_ts)
+
+        # Show all iterations (reversed to show latest first)
+        iterations_to_show = list(reversed(coin_iterations))
+
+        # Show iterations
+        for idx, iteration in enumerate(iterations_to_show):
             timestamp = iteration.get('timestamp', 'Unknown')
             raw_response = iteration.get('raw_response', '')
+
+            # Check if there's an actual trade at this timestamp
+            timestamp_normalized = pd.to_datetime(timestamp).isoformat() if timestamp != 'Unknown' else None
+            has_trade = timestamp_normalized in model_trade_timestamps if timestamp_normalized else False
 
             # Show full Chain of Thought (no truncation)
             with st.sidebar.expander(f"📅 {timestamp}", expanded=False):
@@ -314,3 +381,10 @@ def render_llm_reasoning_sidebar(reasoning_data, coin, selected_models):
                     st.markdown(f"**Action:** {signal.get('signal', 'N/A')}")
                     if signal.get('close_reason'):
                         st.markdown(f"**Reason:** {signal.get('close_reason')}")
+
+            # Show highlight button below the expander if there's an actual trade
+            if has_trade:
+                button_key = f"highlight_{model_name}_{coin}_{idx}_{timestamp}"
+                if st.sidebar.button("🔍 Highlight trade", key=button_key, help="Highlight this trade on the chart"):
+                    st.session_state.highlighted_timestamp = timestamp
+                    st.rerun()
