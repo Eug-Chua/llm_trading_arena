@@ -2,9 +2,13 @@
 
 # Provider API Configurations
 providers:
-  deepseek:
-    base_url: "https://api.deepseek.com"
-    env_var: "DEEPSEEK_API_KEY"
+  # deepseek:
+  #   base_url: "https://api.deepseek.com"
+  #   env_var: "DEEPSEEK_API_KEY"
+
+  deepseek-terminus:
+    base_url: "https://mac-gpustack.aisingapore.net/v1"
+    env_var: "DEEPSEEK_TERMINUS_API_KEY"
 
   openai:
     base_url: "https://api.openai.com/v1"
@@ -22,17 +26,28 @@ providers:
     base_url: "https://api.x.ai/v1"
     env_var: "XAI_API_KEY"
 
+  # alibaba:
+  #   base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+  #   env_var: "ALIBABA_API_KEY"
+
   alibaba:
-    base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
-    env_var: "ALIBABA_API_KEY"
+    base_url: "https://mac-gpustack.aisingapore.net/v1"
+    env_var: "QWEN_API_KEY"
 
 models:
-  deepseek:
-    name: "DeepSeek Chat V3.1"
-    api_provider: "deepseek"
-    model_id: "deepseek-chat"
+  # deepseek:
+  #   name: "DeepSeek Chat V3.1"
+  #   api_provider: "deepseek"
+  #   model_id: "deepseek-chat"
+  #   enabled: true
+  #   priority: 1  # Start with this model first
+
+  deepseek-terminus:
+    name: "DeepSeek V3.1 Terminus Q4"
+    api_provider: "deepseek-terminus"
+    model_id: "deepseek-v3.1-terminus-q4_k_m"
     enabled: true
-    priority: 1  # Start with this model first
+    priority: 7
 
   gpt5:
     name: "GPT-5"
@@ -63,11 +78,18 @@ models:
     enabled: false
     priority: 5
 
+  # qwen:
+  #   name: "Qwen 3 Max"
+  #   api_provider: "alibaba"
+  #   model_id: "qwen3-max"
+  #   enabled: false
+  #   priority: 6
+
   qwen:
-    name: "Qwen 3 Max"
+    name: "Qwen 3 235B Q8"
     api_provider: "alibaba"
-    model_id: "qwen3-max"
-    enabled: false
+    model_id: "qwen3-235b-q8"
+    enabled: true
     priority: 6
 
 # API Configuration
