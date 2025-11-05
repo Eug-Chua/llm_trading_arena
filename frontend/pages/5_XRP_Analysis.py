@@ -10,7 +10,7 @@ sys.path.append(str(project_root))
 from frontend.utils.generic_coin_page import render_coin_page
 
 # Load XRP logo for page icon
-logo_path = project_root / "frontend" / "images" / "xrp.png"
+logo_path = project_root / "frontend" / "images" / "coin_logos" /  "xrp.png"
 page_icon = Image.open(logo_path) if logo_path.exists() else "💧"
 
 st.set_page_config(page_title="XRP Analysis", page_icon=page_icon, layout="wide")
