@@ -78,18 +78,16 @@ def render_coin_page(coin_symbol: str):
     config = load_indicator_config()
     interval = config.get('data_interval', '4h')
 
-    # Load data (recursively scan results directory)
-    results_dir = project_root / "results"
+    # Load data
+    checkpoint_dir = project_root / "results" / "checkpoints"
 
-    # Get all available checkpoint files with natural sort (recursively)
+    # Get all available checkpoint files with natural sort
     from frontend.utils.checkpoint_utils import natural_sort_key
-    checkpoint_paths = sorted([f for f in results_dir.rglob("*.pkl")], key=natural_sort_key)
-    available_checkpoints = [p.name for p in checkpoint_paths]
-    checkpoint_path_map = {p.name: p for p in checkpoint_paths}  # Map filename to full path
+    available_checkpoints = sorted([f.name for f in checkpoint_dir.glob("*.pkl")], key=natural_sort_key)
 
     if not available_checkpoints:
-        st.error("❌ No checkpoint files found in results/")
-        st.info("Run a backtest first: `python scripts/run_backtest.py --start 2025-10-18 --end 2025-10-30 --model anthropic --run-id 1`")
+        st.error("❌ No checkpoint files found in results/checkpoints/")
+        st.info("Run a backtest first: `python scripts/run_backtest.py --start 2025-10-18 --end 2025-10-30 --model anthropic`")
         return
 
     checkpoints = {}
@@ -119,10 +117,8 @@ def render_coin_page(coin_symbol: str):
                 index=len(model_files) - 1,
                 key=f"{model_name}_checkpoint_{coin_symbol.lower()}"
             )
-            # Get full path from map
-            full_path = checkpoint_path_map[selected_file]
-            checkpoints[display_name] = load_checkpoint(str(full_path))
-            selected_files[display_name] = full_path
+            checkpoints[display_name] = load_checkpoint(str(checkpoint_dir / selected_file))
+            selected_files[display_name] = selected_file
 
     if not checkpoints:
         st.error("❌ No checkpoint files loaded")
@@ -158,9 +154,8 @@ def render_coin_page(coin_symbol: str):
 
     # Load reasoning data (match checkpoint filenames)
     reasoning_data = {}
-    for display_name, full_path in selected_files.items():
-        # Reasoning file is in same directory as checkpoint
-        reasoning_path = full_path.parent / f"{full_path.stem}_reasoning.json"
+    for display_name, filename in selected_files.items():
+        reasoning_path = checkpoint_dir / filename.replace('.pkl', '_reasoning.json')
         if reasoning_path.exists():
             # Use lowercase model name as key for reasoning data (for backward compatibility)
             model_key = display_name.lower().replace('-', '')
