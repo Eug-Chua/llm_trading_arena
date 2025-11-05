@@ -8,17 +8,19 @@ import json
 import base64
 from pathlib import Path
 import sys
+import pandas as pd
 
 # Add project root to path
 project_root = Path(__file__).parent.parent.parent
 sys.path.append(str(project_root))
 
-from frontend.utils.coin_analysis import (
+# Import from refactored coin chart modules
+from frontend.utils.coin_charts.data_loaders import (
     load_ohlc_data,
     get_coin_trades,
-    create_candlestick_chart,
-    render_llm_reasoning_sidebar
 )
+from frontend.utils.coin_charts.candlestick_chart import create_candlestick_chart
+from frontend.utils.coin_charts.reasoning_sidebar import render_llm_reasoning_sidebar
 from src.data.indicators import load_indicator_config
 
 
@@ -76,41 +78,51 @@ def render_coin_page(coin_symbol: str):
     config = load_indicator_config()
     interval = config.get('data_interval', '4h')
 
-    # Load data
-    checkpoint_dir = project_root / "results" / "checkpoints"
+    # Load data (recursively scan results directory)
+    results_dir = project_root / "results"
 
-    # Get all available checkpoint files with natural sort
+    # Get all available checkpoint files with natural sort (recursively)
     from frontend.utils.checkpoint_utils import natural_sort_key
-    available_checkpoints = sorted([f.name for f in checkpoint_dir.glob("*.pkl")], key=natural_sort_key)
+    checkpoint_paths = sorted([f for f in results_dir.rglob("*.pkl")], key=natural_sort_key)
+    available_checkpoints = [p.name for p in checkpoint_paths]
+    checkpoint_path_map = {p.name: p for p in checkpoint_paths}  # Map filename to full path
 
     if not available_checkpoints:
-        st.error("❌ No checkpoint files found in results/checkpoints/")
-        st.info("Run a backtest first: `python scripts/run_backtest.py --start 2025-10-18 --end 2025-10-30 --model anthropic`")
+        st.error("❌ No checkpoint files found in results/")
+        st.info("Run a backtest first: `python scripts/run_backtest.py --start 2025-10-18 --end 2025-10-30 --model anthropic --run-id 1`")
         return
 
     checkpoints = {}
+    selected_files = {}  # Track selected filenames for reasoning data
 
-    # Anthropic checkpoint selector
-    anthropic_files = [f for f in available_checkpoints if 'anthropic' in f.lower()]
-    if anthropic_files:
-        selected_anthropic = st.sidebar.selectbox(
-            "Anthropic Checkpoint",
-            options=anthropic_files,
-            index=len(anthropic_files) - 1,
-            key=f"anthropic_checkpoint_{coin_symbol.lower()}"
-        )
-        checkpoints['Anthropic'] = load_checkpoint(str(checkpoint_dir / selected_anthropic))
+    # Dynamically detect all model providers from checkpoint filenames
+    model_providers = set()
+    for filename in available_checkpoints:
+        # Extract model name (before _temp)
+        if '_temp' in filename:
+            model_name = filename.split('_temp')[0]
+            model_providers.add(model_name)
 
-    # OpenAI checkpoint selector
-    openai_files = [f for f in available_checkpoints if 'openai' in f.lower()]
-    if openai_files:
-        selected_openai = st.sidebar.selectbox(
-            "OpenAI Checkpoint",
-            options=openai_files,
-            index=len(openai_files) - 1,
-            key=f"openai_checkpoint_{coin_symbol.lower()}"
-        )
-        checkpoints['OpenAI'] = load_checkpoint(str(checkpoint_dir / selected_openai))
+    # Sort model providers alphabetically
+    model_providers = sorted(model_providers)
+
+    # Create checkpoint selector for each detected model
+    for model_name in model_providers:
+        model_files = [f for f in available_checkpoints if f.startswith(model_name + '_temp')]
+        if model_files:
+            # Capitalize display name (e.g., "anthropic" -> "Anthropic", "deepseek-terminus" -> "DeepSeek-Terminus")
+            display_name = model_name.replace('-', ' ').title().replace(' ', '-')
+
+            selected_file = st.sidebar.selectbox(
+                f"{display_name} Checkpoint",
+                options=model_files,
+                index=len(model_files) - 1,
+                key=f"{model_name}_checkpoint_{coin_symbol.lower()}"
+            )
+            # Get full path from map
+            full_path = checkpoint_path_map[selected_file]
+            checkpoints[display_name] = load_checkpoint(str(full_path))
+            selected_files[display_name] = full_path
 
     if not checkpoints:
         st.error("❌ No checkpoint files loaded")
@@ -146,15 +158,13 @@ def render_coin_page(coin_symbol: str):
 
     # Load reasoning data (match checkpoint filenames)
     reasoning_data = {}
-    if anthropic_files and 'Anthropic' in checkpoints:
-        reasoning_path = checkpoint_dir / selected_anthropic.replace('.pkl', '_reasoning.json')
+    for display_name, full_path in selected_files.items():
+        # Reasoning file is in same directory as checkpoint
+        reasoning_path = full_path.parent / f"{full_path.stem}_reasoning.json"
         if reasoning_path.exists():
-            reasoning_data['anthropic'] = load_reasoning(str(reasoning_path))
-
-    if openai_files and 'OpenAI' in checkpoints:
-        reasoning_path = checkpoint_dir / selected_openai.replace('.pkl', '_reasoning.json')
-        if reasoning_path.exists():
-            reasoning_data['openai'] = load_reasoning(str(reasoning_path))
+            # Use lowercase model name as key for reasoning data (for backward compatibility)
+            model_key = display_name.lower().replace('-', '')
+            reasoning_data[model_key] = load_reasoning(str(reasoning_path))
 
     # Controls
     st.sidebar.header("Controls")

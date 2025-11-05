@@ -258,7 +258,7 @@ def create_upside_downside_comparison(trials: List[Dict]):
     ))
 
     fig.update_layout(
-        title='Upside vs Downside Volatility by Trial',
+        title='Trial Comparison',
         xaxis_title='Trial Number',
         yaxis_title='Deviation ($)',
         template='plotly_dark',
@@ -393,7 +393,7 @@ def create_volatility_scatter(trials: List[Dict]):
     # Region below diagonal = more downside volatility (undesirable)
 
     fig.update_layout(
-        title='Upside vs Downside Volatility - Risk Asymmetry Profile',
+        title='Risk Asymmetry Profile',
         xaxis_title='Downside Deviation (% of Starting Capital)',
         yaxis_title='Upside Deviation (% of Starting Capital)',
         template='plotly_dark',
@@ -562,7 +562,7 @@ def create_risk_metrics_summary(trials: List[Dict]):
         summary_data.append({
             'Trial': trial['run_id'],
             'Sortino Ratio': trial['sortino_ratio'],
-            'Upside/Downside': trial['upside_downside_ratio'],
+            'Std Dev': trial['overall_std_dev'],
             'Upside Dev': trial['upside_deviation'],
             'Downside Dev': trial['downside_deviation'],
             'Skewness': trial['skewness'],
@@ -573,7 +573,7 @@ def create_risk_metrics_summary(trials: List[Dict]):
     summary_data.append({
         'Trial': 999999,  # Large number to sort at bottom
         'Sortino Ratio': np.mean([t['sortino_ratio'] for t in trials]),
-        'Upside/Downside': np.mean([t['upside_downside_ratio'] for t in trials]),
+        'Std Dev': np.mean([t['overall_std_dev'] for t in trials]),
         'Upside Dev': np.mean([t['upside_deviation'] for t in trials]),
         'Downside Dev': np.mean([t['downside_deviation'] for t in trials]),
         'Skewness': np.mean([t['skewness'] for t in trials]),
@@ -915,6 +915,9 @@ def create_overall_stats_table(trials: List[Dict]) -> pd.DataFrame:
 
     # Individual trial rows
     for trial in trials:
+        # Calculate std dev as % of starting capital
+        std_dev_pct = (trial['overall_std_dev'] / trial['starting_capital']) * 100
+
         summary_rows.append({
             'Trial': trial['run_id'],
             'Acc. Value': trial['final_value'],
@@ -925,10 +928,14 @@ def create_overall_stats_table(trials: List[Dict]) -> pd.DataFrame:
             'Biggest Win': trial['biggest_win'],
             'Biggest Loss': trial['biggest_loss'],
             'Sharpe': trial['sharpe_ratio'],
+            'Std Dev %': std_dev_pct,
             'No of Trades': trial['total_trades']
         })
 
     # Aggregate row - use string for Trial column to distinguish it
+    # Calculate average std dev %
+    avg_std_dev_pct = np.mean([(t['overall_std_dev'] / t['starting_capital']) * 100 for t in trials])
+
     summary_rows.append({
         'Trial': 999999,  # Large number to sort at bottom
         'Acc. Value': np.mean([t['final_value'] for t in trials]),
@@ -939,6 +946,7 @@ def create_overall_stats_table(trials: List[Dict]) -> pd.DataFrame:
         'Biggest Win': np.mean([t['biggest_win'] for t in trials]),
         'Biggest Loss': np.mean([t['biggest_loss'] for t in trials]),
         'Sharpe': np.mean([t['sharpe_ratio'] for t in trials]),
+        'Std Dev %': avg_std_dev_pct,
         'No of Trades': int(np.mean([t['total_trades'] for t in trials]))
     })
 

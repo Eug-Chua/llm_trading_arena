@@ -106,6 +106,9 @@ def extract_metrics(checkpoint: Dict) -> Dict:
     median_leverage = np.median(leverages) if leverages else 1
 
     # Advanced risk metrics
+    # Overall standard deviation (volatility of all trade returns)
+    overall_std_dev = np.std(trade_pnls, ddof=1) if len(trade_pnls) > 1 else 0
+
     # Downside deviation (volatility of negative returns only)
     negative_pnls = [pnl for pnl in trade_pnls if pnl < 0]
     downside_deviation = np.std(negative_pnls) if len(negative_pnls) > 1 else 0
@@ -154,6 +157,7 @@ def extract_metrics(checkpoint: Dict) -> Dict:
         'avg_leverage': avg_leverage,
         'median_leverage': median_leverage,
         # Risk & distribution metrics
+        'overall_std_dev': overall_std_dev,
         'downside_deviation': downside_deviation,
         'upside_deviation': upside_deviation,
         'sortino_ratio': sortino_ratio,

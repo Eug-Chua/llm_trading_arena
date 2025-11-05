@@ -79,21 +79,25 @@ def load_reasoning(reasoning_path: str) -> Dict[str, Any]:
         return {}
 
 
-def get_checkpoint_paths(results_dir: str = "results/checkpoints") -> list[str]:
+def get_checkpoint_paths(results_dir: str = "results") -> list[str]:
     """
-    Get all checkpoint file paths from the results directory.
+    Get all checkpoint file paths from the results directory (recursively).
+
+    Supports both old flat structure (results/checkpoints/*.pkl) and new nested structure
+    (results/{model}/temp{temp}/*.pkl).
 
     Args:
-        results_dir: Directory containing checkpoint files
+        results_dir: Root directory containing checkpoint files (default: results)
 
     Returns:
         List of checkpoint file paths
     """
-    checkpoint_dir = Path(results_dir)
-    if not checkpoint_dir.exists():
+    results_path = Path(results_dir)
+    if not results_path.exists():
         return []
 
-    return [str(p) for p in checkpoint_dir.glob("*.pkl")]
+    # Recursively find all .pkl files
+    return [str(p) for p in results_path.rglob("*.pkl")]
 
 
 def group_checkpoints_by_model(checkpoint_paths: list[str]) -> Dict[str, list[str]]:
