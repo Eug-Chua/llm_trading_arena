@@ -49,11 +49,6 @@ class Config:
         """Get list of trading symbols"""
         return self.trading_rules.get("trading_rules", {}).get("symbols", [])
 
-    def get_leverage_range(self) -> tuple[int, int]:
-        """Get min and max leverage"""
-        leverage = self.trading_rules.get("trading_rules", {}).get("leverage", {})
-        return (leverage.get("min", 10), leverage.get("max", 20))
-
 
 def load_config(filepath: str) -> Dict[str, Any]:
     """
