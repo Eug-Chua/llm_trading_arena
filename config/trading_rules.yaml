@@ -4,11 +4,8 @@ trading_rules:
   # Capital
   starting_capital: 10000
 
-  # Leverage constraints
-  leverage:
-    min: 10
-    max: 20
-    default: 15
+  # Note: Leverage is determined by the LLM on a per-trade basis
+  # No min/max constraints are enforced in the current implementation
 
   # Mandatory risk management
   risk_management:
