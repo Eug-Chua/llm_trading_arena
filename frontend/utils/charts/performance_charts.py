@@ -68,7 +68,7 @@ def create_trial_performance_chart(trials: List[Dict], metric: str, title: str, 
     return fig
 
 
-def create_trade_pnl_kde_overlay(trials: List[Dict], config_name: str, extract_metrics_fn=None):
+def create_trade_pnl_kde_overlay(trials: List[Dict], config_name: str):
     """
     Create overlaid KDE curves showing distribution of individual trade P&Ls for each trial
 
@@ -79,7 +79,6 @@ def create_trade_pnl_kde_overlay(trials: List[Dict], config_name: str, extract_m
     Args:
         trials: List of trial metadata dictionaries
         config_name: Configuration name for the chart title
-        extract_metrics_fn: Function to extract metrics from checkpoint (optional, for compatibility)
     """
     from scipy import stats
 
@@ -94,21 +93,14 @@ def create_trade_pnl_kde_overlay(trials: List[Dict], config_name: str, extract_m
     all_pnls = []
 
     for idx, trial_meta in enumerate(trials):
-        # Find the checkpoint for this trial
-        checkpoint = None
-        for name, cp in st.session_state.get('loaded_checkpoints', {}).items():
-            # Use the passed function or import dynamically
-            if extract_metrics_fn:
-                meta = extract_metrics_fn(cp)
-            else:
-                from frontend.utils.statistical_metrics import extract_metrics
-                meta = extract_metrics(cp)
-            if (meta['model'] == trial_meta['model'] and
-                meta['temperature'] == trial_meta['temperature'] and
-                meta['run_id'] == trial_meta['run_id']):
-                checkpoint = cp
-                break
+        # Get checkpoint using the stored checkpoint_path
+        checkpoint_path = trial_meta.get('checkpoint_path')
+        if not checkpoint_path:
+            continue
 
+        # The checkpoint_path is the stem (filename without extension)
+        # Find it in loaded_checkpoints
+        checkpoint = st.session_state.get('loaded_checkpoints', {}).get(checkpoint_path)
         if not checkpoint:
             continue
 

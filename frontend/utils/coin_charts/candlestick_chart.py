@@ -3,7 +3,7 @@ Candlestick Chart Creation
 
 This module contains the main candlestick chart creation function:
 - Interactive OHLCV chart with technical indicators
-- Trade markers and annotations
+- Trade markers with distinctive shapes/colors for each model
 - Highlight functionality for specific timestamps
 """
 import pandas as pd
@@ -17,6 +17,7 @@ project_root = Path(__file__).parent.parent.parent.parent
 sys.path.append(str(project_root))
 
 from src.data.indicators import TechnicalIndicators, load_indicator_config
+from frontend.utils.visual_config import get_model_color, get_candlestick_colors, get_indicator_colors, get_chart_height, get_trade_marker_settings
 
 def create_candlestick_chart(df, trades_by_model, show_indicators, selected_models, coin_symbol, interval='4h', highlighted_timestamp=None):
     """Create interactive candlestick chart with indicators and trades
@@ -41,6 +42,11 @@ def create_candlestick_chart(df, trades_by_model, show_indicators, selected_mode
         subplot_titles=(f'{coin_symbol}/USD - {interval.upper()} Chart', f'RSI ({rsi_periods[1]})', 'MACD')
     )
 
+    # Load color configurations
+    candlestick_colors = get_candlestick_colors()
+    indicator_colors = get_indicator_colors()
+    trade_marker_settings = get_trade_marker_settings()
+
     # Main candlestick chart
     fig.add_trace(
         go.Candlestick(
@@ -50,8 +56,8 @@ def create_candlestick_chart(df, trades_by_model, show_indicators, selected_mode
             low=df['low'],
             close=df['close'],
             name=coin_symbol,
-            increasing_line_color='#00ff88',
-            decreasing_line_color='#ff4444'
+            increasing_line_color=candlestick_colors.get('increasing', '#00ff88'),
+            decreasing_line_color=candlestick_colors.get('decreasing', '#ff4444')
         ),
         row=1, col=1
     )
@@ -70,7 +76,7 @@ def create_candlestick_chart(df, trades_by_model, show_indicators, selected_mode
                     x=df['timestamp'],
                     y=ema_df[ema_col],
                     name=f'EMA {ema_periods[0]}',
-                    line=dict(color='#00d4ff', width=1.5),
+                    line=dict(color=indicator_colors.get('ema_20', '#00d4ff'), width=1.5),
                     opacity=0.7
                 ),
                 row=1, col=1
@@ -84,28 +90,29 @@ def create_candlestick_chart(df, trades_by_model, show_indicators, selected_mode
                     x=df['timestamp'],
                     y=ema_df[ema_col],
                     name=f'EMA {ema_periods[1]}',
-                    line=dict(color='#ffd700', width=1.5),
+                    line=dict(color=indicator_colors.get('ema_50', '#ffd700'), width=1.5),
                     opacity=0.7
                 ),
                 row=1, col=1
             )
 
-    # Add trade markers as simple colored dots
-    model_config = {
-        'Anthropic': {
-            'color': '#D97757'  # Orange for Claude/Anthropic
-        },
-        'OpenAI': {
-            'color': '#ECF4E8'  # Light grey for OpenAI
-        }
-    }
-
+    # Add trade markers with distinctive colors for each model
     for model_name, trades in trades_by_model.items():
         if model_name not in selected_models:
             continue
 
-        config = model_config.get(model_name, {'color': '#ffffff'})
-        dot_color = config['color']
+        # Extract base model name (remove date suffixes like "_Oct_31")
+        base_model_name = model_name.split('_')[0]  # "Anthropic_Oct_31" -> "Anthropic"
+
+        # Get color from visual config
+        dot_color = get_model_color(base_model_name)
+        marker_symbol = 'circle'
+
+        # Get marker size settings from config
+        default_size = trade_marker_settings.get('default_size', 14)
+        highlighted_size = trade_marker_settings.get('highlighted_size', 30)
+        default_opacity = trade_marker_settings.get('opacity', 0.8)
+        highlighted_opacity = trade_marker_settings.get('highlighted_opacity', 0.9)
 
         # Buy/Open markers
         buys = [t for t in trades if t['action'] == 'BUY']
@@ -130,11 +137,11 @@ def create_candlestick_chart(df, trades_by_model, show_indicators, selected_mode
                 highlighted_ts = pd.to_datetime(highlighted_timestamp).isoformat() if highlighted_timestamp else None
 
                 if highlighted_ts and trade_ts == highlighted_ts:
-                    marker_sizes.append(30)  # Larger size for highlighted
-                    marker_opacities.append(0.9)
+                    marker_sizes.append(highlighted_size)
+                    marker_opacities.append(highlighted_opacity)
                 else:
-                    marker_sizes.append(12)  # Normal size
-                    marker_opacities.append(0.7)
+                    marker_sizes.append(default_size)
+                    marker_opacities.append(default_opacity)
 
             fig.add_trace(
                 go.Scatter(
@@ -144,6 +151,7 @@ def create_candlestick_chart(df, trades_by_model, show_indicators, selected_mode
                     name=f'{model_name} - Entry',
                     marker=dict(
                         size=marker_sizes,
+                        symbol=marker_symbol,
                         color=dot_color,
                         opacity=marker_opacities,
                         line=dict(width=0)  # No border
@@ -177,11 +185,11 @@ def create_candlestick_chart(df, trades_by_model, show_indicators, selected_mode
                 highlighted_ts = pd.to_datetime(highlighted_timestamp).isoformat() if highlighted_timestamp else None
 
                 if highlighted_ts and trade_ts == highlighted_ts:
-                    close_marker_sizes.append(30)  # Larger size for highlighted
-                    close_marker_opacities.append(0.9)  # Less opaque for highlighted
+                    close_marker_sizes.append(highlighted_size)
+                    close_marker_opacities.append(highlighted_opacity)
                 else:
-                    close_marker_sizes.append(12)  # Normal size
-                    close_marker_opacities.append(0.7)  # Full opacity
+                    close_marker_sizes.append(default_size)
+                    close_marker_opacities.append(default_opacity)
 
             fig.add_trace(
                 go.Scatter(
@@ -191,6 +199,7 @@ def create_candlestick_chart(df, trades_by_model, show_indicators, selected_mode
                     name=f'{model_name} - Exit',
                     marker=dict(
                         size=close_marker_sizes,
+                        symbol=marker_symbol,
                         color=dot_color,
                         opacity=close_marker_opacities,
                         line=dict(width=0)  # No border
@@ -212,7 +221,7 @@ def create_candlestick_chart(df, trades_by_model, show_indicators, selected_mode
                 x=df['timestamp'],
                 y=rsi_df[rsi_col],
                 name=f'RSI {rsi_periods[1]}',
-                line=dict(color='#00d4ff', width=2)
+                line=dict(color=indicator_colors.get('rsi', '#00d4ff'), width=2)
             ),
             row=2, col=1
         )
@@ -233,7 +242,9 @@ def create_candlestick_chart(df, trades_by_model, show_indicators, selected_mode
     if 'macd_histogram' in macd_df.columns:
         # MACD histogram
         histogram = macd_df['macd_histogram']
-        colors = ['#00ff88' if val >= 0 else '#ff4444' for val in histogram]
+        hist_pos_color = indicator_colors.get('macd_histogram_positive', '#00ff88')
+        hist_neg_color = indicator_colors.get('macd_histogram_negative', '#ff4444')
+        colors = [hist_pos_color if val >= 0 else hist_neg_color for val in histogram]
         fig.add_trace(
             go.Bar(
                 x=df['timestamp'],
@@ -252,7 +263,7 @@ def create_candlestick_chart(df, trades_by_model, show_indicators, selected_mode
                 x=df['timestamp'],
                 y=macd_df['macd'],
                 name='MACD',
-                line=dict(color='#00d4ff', width=2)
+                line=dict(color=indicator_colors.get('macd', '#00d4ff'), width=2)
             ),
             row=3, col=1
         )
@@ -264,14 +275,14 @@ def create_candlestick_chart(df, trades_by_model, show_indicators, selected_mode
                 x=df['timestamp'],
                 y=macd_df['macd_signal'],
                 name='Signal',
-                line=dict(color='#ff6b6b', width=2)
+                line=dict(color=indicator_colors.get('macd_signal', '#ff6b6b'), width=2)
             ),
             row=3, col=1
         )
 
     # Update layout
     fig.update_layout(
-        height=900,
+        height=get_chart_height('candlestick_chart'),
         template='plotly_dark',
         showlegend=False,  # Hide legends as requested
         hovermode='x unified',

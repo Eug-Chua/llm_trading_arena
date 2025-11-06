@@ -186,6 +186,18 @@ def group_by_model_config(checkpoints_data: Dict) -> Dict:
     for checkpoint_path, checkpoint_data in checkpoints_data.items():
         # Extract metrics
         metrics = extract_metrics(checkpoint_data)
+
+        # Skip checkpoints without run_id (required for statistical analysis)
+        if metrics['run_id'] is None or metrics['run_id'] == 0:
+            continue
+
+        # All checkpoints should now have temperature in metadata
+        # This fallback is kept only for safety in case of missing metadata
+        if metrics['temperature'] == 0.7 and ('temp01' in checkpoint_path or 'temp07' in checkpoint_path):
+            # Infer from folder path as fallback
+            if 'temp01' in checkpoint_path:
+                metrics['temperature'] = 0.1
+
         config_name = f"{metrics['model']}_temp{metrics['temperature']}"
 
         if config_name not in grouped:

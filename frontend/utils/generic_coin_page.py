@@ -84,49 +84,143 @@ def render_coin_page(coin_symbol: str):
     # Get all available checkpoint files with natural sort (recursively)
     from frontend.utils.checkpoint_utils import natural_sort_key
     checkpoint_paths = sorted([f for f in results_dir.rglob("*.pkl")], key=natural_sort_key)
-    available_checkpoints = [p.name for p in checkpoint_paths]
-    checkpoint_path_map = {p.name: p for p in checkpoint_paths}  # Map filename to full path
 
-    if not available_checkpoints:
+    if not checkpoint_paths:
         st.error("❌ No checkpoint files found in results/")
         st.info("Run a backtest first: `python scripts/run_backtest.py --start 2025-10-18 --end 2025-10-30 --model anthropic --run-id 1`")
         return
 
+    # Extract unique models and temperatures from checkpoint paths
+    # Path format: results/{model}/temp{XX}/{filename}
+    models_with_temps = {}  # {model: {temp_folder: [checkpoint_paths]}}
+
+    for checkpoint_path in checkpoint_paths:
+        parts = checkpoint_path.parts
+        if len(parts) >= 3:
+            model = parts[-3]  # e.g., 'anthropic', 'openai'
+            temp_folder = parts[-2]  # e.g., 'temp01', 'temp07'
+
+            # Skip if not in valid structure (e.g., archive files, reports folder)
+            if not temp_folder.startswith('temp'):
+                continue
+
+            if model not in models_with_temps:
+                models_with_temps[model] = {}
+            if temp_folder not in models_with_temps[model]:
+                models_with_temps[model][temp_folder] = []
+
+            models_with_temps[model][temp_folder].append(checkpoint_path)
+
+    if not models_with_temps:
+        st.error("❌ No valid checkpoint structure found")
+        return
+
+    # Controls section header (will be populated after loading checkpoints)
+    st.sidebar.header("Controls")
+    controls_placeholder_model = st.sidebar.empty()
+    controls_placeholder_indicators = st.sidebar.empty()
+
+    # Configuration section
+    st.sidebar.markdown("---")
+    st.sidebar.header("Configuration")
+
+    # Temperature selector (primary control)
+    st.sidebar.markdown("### Select Temperature")
+    temp_choice = st.sidebar.radio(
+        "Temperature",
+        options=['0.7', '0.1'],
+        index=0,  # Default to 0.7
+        label_visibility="collapsed",
+        key=f"temp_radio_{coin_symbol.lower()}"
+    )
+
+    # Map display to folder name
+    temp_folder_map = {
+        '0.7': 'temp07',
+        '0.1': 'temp01'
+    }
+    selected_temp_folder = temp_folder_map[temp_choice]
+
+    # Load latest trial for each model at selected temperature
     checkpoints = {}
-    selected_files = {}  # Track selected filenames for reasoning data (will store full Path objects)
+    selected_files = {}
 
-    # Dynamically detect all model providers from checkpoint filenames
-    model_providers = set()
-    for filename in available_checkpoints:
-        # Extract model name (before _temp)
-        if '_temp' in filename:
-            model_name = filename.split('_temp')[0]
-            model_providers.add(model_name)
-
-    # Sort model providers alphabetically
-    model_providers = sorted(model_providers)
-
-    # Create checkpoint selector for each detected model
-    for model_name in model_providers:
-        model_files = [f for f in available_checkpoints if f.startswith(model_name + '_temp')]
-        if model_files:
-            # Capitalize display name (e.g., "anthropic" -> "Anthropic", "deepseek-terminus" -> "DeepSeek-Terminus")
-            display_name = model_name.replace('-', ' ').title().replace(' ', '-')
-
-            selected_file = st.sidebar.selectbox(
-                f"{display_name} Checkpoint",
-                options=model_files,
-                index=len(model_files) - 1,
-                key=f"{model_name}_checkpoint_{coin_symbol.lower()}"
-            )
-            # Get full path from map
-            full_path = checkpoint_path_map[selected_file]
-            checkpoints[display_name] = load_checkpoint(str(full_path))
-            selected_files[display_name] = full_path
+    for model, temp_data in sorted(models_with_temps.items()):
+        if selected_temp_folder in temp_data:
+            # Get latest checkpoint (last in naturally sorted list)
+            model_checkpoints = sorted(temp_data[selected_temp_folder], key=natural_sort_key)
+            if model_checkpoints:
+                latest_checkpoint = model_checkpoints[-1]
+                display_name = model.replace('-', ' ').title()
+                checkpoints[display_name] = load_checkpoint(str(latest_checkpoint))
+                selected_files[display_name] = latest_checkpoint
 
     if not checkpoints:
-        st.error("❌ No checkpoint files loaded")
+        st.warning(f"⚠️ No checkpoints found for temperature {temp_choice}")
         return
+
+    # Advanced options (collapsible)
+    with st.sidebar.expander("Advanced Options", expanded=False):
+        st.markdown("**Select specific trial**")
+
+        # Model selector
+        available_models = sorted(models_with_temps.keys())
+        override_model = st.selectbox(
+            "Model",
+            options=['None'] + available_models,
+            format_func=lambda x: x.replace('-', ' ').title() if x != 'None' else 'Use default',
+            key=f"override_model_{coin_symbol.lower()}"
+        )
+
+        if override_model != 'None':
+            # Show trials for this model at selected temperature
+            if selected_temp_folder in models_with_temps[override_model]:
+                trial_checkpoints = sorted(models_with_temps[override_model][selected_temp_folder], key=natural_sort_key)
+                trial_names = [p.name for p in trial_checkpoints]
+
+                override_trial = st.selectbox(
+                    "Trial",
+                    options=trial_names,
+                    index=len(trial_names) - 1,
+                    key=f"override_trial_{coin_symbol.lower()}"
+                )
+
+                # Replace the default checkpoint for this model
+                override_checkpoint_path = [p for p in trial_checkpoints if p.name == override_trial][0]
+                display_name = override_model.replace('-', ' ').title()
+                checkpoints[display_name] = load_checkpoint(str(override_checkpoint_path))
+                selected_files[display_name] = override_checkpoint_path
+
+                st.success(f"✓ Using {override_trial} for {display_name}")
+
+    # Now populate Controls section with actual widgets
+    with controls_placeholder_model.container():
+        # Model selector
+        model_options = list(checkpoints.keys())
+        selected_models = st.multiselect(
+            "Select Model(s)",
+            options=model_options,
+            default=model_options,
+            key=f"model_selector_{coin_symbol.lower()}"
+        )
+
+    with controls_placeholder_indicators.container():
+        # Indicator toggles
+        st.markdown("### Indicators")
+        show_indicators = {
+            'ema20': st.checkbox("Show EMA 20", value=True, key=f"ema20_{coin_symbol.lower()}"),
+            'ema50': st.checkbox("Show EMA 50", value=True, key=f"ema50_{coin_symbol.lower()}"),
+            'volume': st.checkbox("Show Volume", value=False, key=f"volume_{coin_symbol.lower()}")
+        }
+
+    # Show current configuration (in Configuration section)
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("### Current View")
+    st.sidebar.markdown(f"**Coin:** {coin_symbol}")
+    st.sidebar.markdown(f"**Temperature:** {temp_choice}")
+    st.sidebar.markdown(f"**Models shown:** {len(checkpoints)}")
+    for model_name, checkpoint_path in selected_files.items():
+        st.sidebar.markdown(f"- {model_name}: `{checkpoint_path.name}`")
 
     # Load OHLC data
     df = load_ohlc_data(coin_symbol, interval)
@@ -165,25 +259,6 @@ def render_coin_page(coin_symbol: str):
             # Use lowercase model name as key for reasoning data (for backward compatibility)
             model_key = display_name.lower().replace('-', '')
             reasoning_data[model_key] = load_reasoning(str(reasoning_path))
-
-    # Controls
-    st.sidebar.header("Controls")
-
-    # Model selector
-    model_options = list(checkpoints.keys())
-    selected_models = st.sidebar.multiselect(
-        "Select Model(s)",
-        options=model_options,
-        default=model_options
-    )
-
-    # Indicator toggles
-    st.sidebar.markdown("### Indicators")
-    show_indicators = {
-        'ema20': st.sidebar.checkbox("Show EMA 20", value=True),
-        'ema50': st.sidebar.checkbox("Show EMA 50", value=True),
-        'volume': st.sidebar.checkbox("Show Volume", value=False)
-    }
 
     # Extract trades by model
     trades_by_model = {}

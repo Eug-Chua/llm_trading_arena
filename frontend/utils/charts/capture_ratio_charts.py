@@ -15,7 +15,7 @@ from typing import Dict, List
 from frontend.utils.capture_ratios import calculate_coin_capture_ratios
 
 
-def create_capture_ratios_chart(trials: List[Dict], coins: List[str], extract_metrics_fn=None):
+def create_capture_ratios_chart(trials: List[Dict], coins: List[str]):
     """
     Create visualization showing upside/downside capture ratios per coin per trial
 
@@ -25,31 +25,21 @@ def create_capture_ratios_chart(trials: List[Dict], coins: List[str], extract_me
     Args:
         trials: List of trial metadata dictionaries
         coins: List of coin symbols to analyze
-        extract_metrics_fn: Function to extract metrics from checkpoint (optional, for compatibility)
     """
     # Calculate capture ratios for each trial
     trial_capture_data = []
 
     for trial in trials:
-        # Find the checkpoint for this trial
-        checkpoint_name = None
-        for name, checkpoint in st.session_state.get('loaded_checkpoints', {}).items():
-            # Use the passed function or import dynamically
-            if extract_metrics_fn:
-                meta = extract_metrics_fn(checkpoint)
-            else:
-                from frontend.utils.statistical_metrics import extract_metrics
-                meta = extract_metrics(checkpoint)
-            if (meta['model'] == trial['model'] and
-                meta['temperature'] == trial['temperature'] and
-                meta['run_id'] == trial['run_id']):
-                checkpoint_name = name
-                break
-
-        if not checkpoint_name:
+        # Get checkpoint using the stored checkpoint_path
+        checkpoint_path = trial.get('checkpoint_path')
+        if not checkpoint_path:
             continue
 
-        checkpoint = st.session_state['loaded_checkpoints'][checkpoint_name]
+        # The checkpoint_path is the stem (filename without extension)
+        # Find it in loaded_checkpoints
+        checkpoint = st.session_state.get('loaded_checkpoints', {}).get(checkpoint_path)
+        if not checkpoint:
+            continue
 
         # Calculate capture ratios for this trial
         capture_ratios = calculate_coin_capture_ratios(checkpoint, coins)

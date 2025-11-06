@@ -12,7 +12,7 @@ import plotly.express as px
 from typing import Dict
 
 
-def create_equity_curve_overlay(grouped_data: Dict, config_name: str, extract_metrics_fn=None):
+def create_equity_curve_overlay(grouped_data: Dict, config_name: str):
     """
     Create overlaid equity curves for all trials of a single configuration
 
@@ -21,7 +21,6 @@ def create_equity_curve_overlay(grouped_data: Dict, config_name: str, extract_me
     Args:
         grouped_data: Dictionary mapping config names to lists of trial metadata
         config_name: Name of the configuration to visualize
-        extract_metrics_fn: Function to extract metrics from checkpoint (optional, for compatibility)
     """
     trials = grouped_data.get(config_name, [])
 
@@ -35,25 +34,17 @@ def create_equity_curve_overlay(grouped_data: Dict, config_name: str, extract_me
 
     # Load trade history for each trial
     for idx, trial_meta in enumerate(trials):
-        # Find the checkpoint file
-        checkpoint_name = None
-        for name, checkpoint in st.session_state.get('loaded_checkpoints', {}).items():
-            # Use the passed function or import dynamically
-            if extract_metrics_fn:
-                meta = extract_metrics_fn(checkpoint)
-            else:
-                from frontend.utils.statistical_metrics import extract_metrics
-                meta = extract_metrics(checkpoint)
-            if (meta['model'] == trial_meta['model'] and
-                meta['temperature'] == trial_meta['temperature'] and
-                meta['run_id'] == trial_meta['run_id']):
-                checkpoint_name = name
-                break
-
-        if not checkpoint_name:
+        # Get checkpoint using the stored checkpoint_path
+        checkpoint_path = trial_meta.get('checkpoint_path')
+        if not checkpoint_path:
             continue
 
-        checkpoint = st.session_state['loaded_checkpoints'][checkpoint_name]
+        # The checkpoint_path is the stem (filename without extension)
+        # Find it in loaded_checkpoints
+        checkpoint = st.session_state.get('loaded_checkpoints', {}).get(checkpoint_path)
+        if not checkpoint:
+            continue
+
         trade_log = checkpoint.get('trade_history', [])
 
         # Build equity curve
