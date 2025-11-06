@@ -24,18 +24,6 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS for blinking effect
-st.markdown("""
-<style>
-@keyframes blink {
-    0%, 50%, 100% { opacity: 1; }
-    25%, 75% { opacity: 0.5; }
-}
-.blinking {
-    animation: blink 2s infinite;
-}
-</style>
-""", unsafe_allow_html=True)
 
 
 @st.cache_data
@@ -95,15 +83,15 @@ def extract_metrics(checkpoint):
 
 def create_performance_chart(checkpoints_data):
     """Create interactive performance comparison chart"""
-    fig = go.Figure()
+    from frontend.utils.visual_config import get_model_color, get_chart_height
 
-    colors = ['#00d4ff', '#ff6b6b', '#4ecdc4', '#95e1d3']  # Colors for different models
+    fig = go.Figure()
 
     # Track date range from metadata
     min_date = None
     max_date = None
 
-    for idx, (model_name, checkpoint) in enumerate(checkpoints_data.items()):
+    for model_name, checkpoint in checkpoints_data.items():
         trade_log = checkpoint.get('trade_history', [])
         metadata = checkpoint.get('metadata', {})
 
@@ -144,6 +132,9 @@ def create_performance_chart(checkpoints_data):
                 timestamps.append(trade['timestamp'])
                 account_values.append(current_value)
 
+        # Get model color from config
+        line_color = get_model_color(model_name)
+
         # Create hover text for the line
         hover_template = (
             f"<b>{model_name}</b><br>" +
@@ -158,7 +149,7 @@ def create_performance_chart(checkpoints_data):
             y=account_values,
             mode='lines+markers',
             name=model_name,
-            line=dict(color=colors[idx % len(colors)], width=3),
+            line=dict(color=line_color, width=3),
             marker=dict(size=10),
             hovertemplate=hover_template
         ))
@@ -188,7 +179,7 @@ def create_performance_chart(checkpoints_data):
                 name=f'{model_name} (Final)',
                 marker=dict(
                     size=20,
-                    color=colors[idx % len(colors)],
+                    color=line_color,
                     symbol='diamond',
                     line=dict(color='white', width=1)
                 ),
@@ -209,7 +200,7 @@ def create_performance_chart(checkpoints_data):
     # Layout
     fig.update_layout(
         title={
-            'text': "LLM Trading Performance Comparison",
+            'text': "Total Account Value",
             'x': 0.5,
             'xanchor': 'center',
             'font': {'size': 24, 'color': '#e0e0e0'}
@@ -218,7 +209,7 @@ def create_performance_chart(checkpoints_data):
         yaxis_title="Account Value (USD)",
         hovermode='closest',
         template='plotly_dark',
-        height=600,
+        height=get_chart_height('performance_chart'),
         legend=dict(
             yanchor="top",
             y=0.99,
@@ -428,13 +419,12 @@ def render_trade_timeline(checkpoints_data, reasoning_data):
         # Color based on action
         if trade['action'] == 'BUY':
             icon = "🟢"
-            color = "#00ff88"
         else:
             icon = "🔴" if trade['pnl'] and trade['pnl'] < 0 else "🟢"
-            color = "#ff4444" if trade['pnl'] and trade['pnl'] < 0 else "#00ff88"
 
         # Create expandable section
-        with st.sidebar.expander(f"{icon} {trade['model']} - {trade['coin']} {trade['action']}", expanded=False):
+        expander_label = f"{icon} {trade['model']} - {trade['coin']} {trade['action']}"
+        with st.sidebar.expander(expander_label, expanded=False):
             st.markdown(f"**📅 Time:** {timestamp_str}")
             st.markdown(f"**💰 Price:** ${trade['price']:,.2f}")
 
@@ -464,40 +454,109 @@ def main():
         st.info("Run a backtest first: `python scripts/run_backtest.py --start 2025-10-18 --end 2025-10-30 --model anthropic --run-id 1`")
         return
 
-    # Sidebar: Checkpoint selection
-    st.sidebar.header("Select Checkpoints")
+    # Sidebar: Configuration
+    st.sidebar.header("Configuration")
 
+    # Extract unique models and temperatures from checkpoint paths
+    # Path format: results/{model}/temp{XX}/{filename}
+    models_with_temps = {}  # {model: {temp_folder: [checkpoint_paths]}}
+
+    for checkpoint_path in checkpoint_paths:
+        parts = checkpoint_path.parts
+        if len(parts) >= 3:
+            model = parts[-3]  # e.g., 'anthropic', 'openai'
+            temp_folder = parts[-2]  # e.g., 'temp01', 'temp07'
+
+            # Skip if not in valid structure (e.g., archive files, reports folder)
+            if not temp_folder.startswith('temp'):
+                continue
+
+            if model not in models_with_temps:
+                models_with_temps[model] = {}
+            if temp_folder not in models_with_temps[model]:
+                models_with_temps[model][temp_folder] = []
+
+            models_with_temps[model][temp_folder].append(checkpoint_path)
+
+    if not models_with_temps:
+        st.error("❌ No valid checkpoint structure found")
+        return
+
+    # Temperature selector (primary control)
+    st.sidebar.markdown("### Select Temperature")
+    temp_choice = st.sidebar.radio(
+        "Temperature",
+        options=['0.7', '0.1'],
+        index=0,  # Default to 0.7
+        label_visibility="collapsed"
+    )
+
+    # Map display to folder name
+    temp_folder_map = {
+        '0.7': 'temp07',
+        '0.1': 'temp01'
+    }
+    selected_temp_folder = temp_folder_map[temp_choice]
+
+    # Load latest trial for each model at selected temperature
     selected_checkpoints = {}
-    selected_files = {}  # Track selected filenames for reasoning data
+    selected_files = {}
 
-    # Dynamically detect all model providers from checkpoint filenames
-    model_providers = set()
-    for filename in available_checkpoints:
-        # Extract model name (before _temp)
-        if '_temp' in filename:
-            model_name = filename.split('_temp')[0]
-            model_providers.add(model_name)
+    from frontend.utils.checkpoint_utils import natural_sort_key
 
-    # Sort model providers alphabetically
-    model_providers = sorted(model_providers)
+    for model, temp_data in sorted(models_with_temps.items()):
+        if selected_temp_folder in temp_data:
+            # Get latest checkpoint (last in naturally sorted list)
+            checkpoints = sorted(temp_data[selected_temp_folder], key=natural_sort_key)
+            if checkpoints:
+                latest_checkpoint = checkpoints[-1]
+                display_name = model.replace('-', ' ').title()
+                selected_checkpoints[display_name] = load_checkpoint(str(latest_checkpoint))
+                selected_files[display_name] = latest_checkpoint
 
-    # Create checkpoint selector for each detected model
-    for model_name in model_providers:
-        model_files = [f for f in available_checkpoints if f.startswith(model_name + '_temp')]
-        if model_files:
-            # Capitalize display name (e.g., "anthropic" -> "Anthropic", "deepseek-terminus" -> "DeepSeek-Terminus")
-            display_name = model_name.replace('-', ' ').title().replace(' ', '-')
+    if not selected_checkpoints:
+        st.warning(f"⚠️ No checkpoints found for temperature {temp_choice}")
+        return
 
-            selected_file = st.sidebar.selectbox(
-                f"{display_name} Checkpoint",
-                options=model_files,
-                index=len(model_files) - 1,
-                key=f"{model_name}_checkpoint"
-            )
-            # Get full path from map
-            full_path = checkpoint_path_map[selected_file]
-            selected_checkpoints[display_name] = load_checkpoint(str(full_path))
-            selected_files[display_name] = full_path
+    # Advanced options (collapsible)
+    with st.sidebar.expander("Advanced Options", expanded=False):
+        st.markdown("**Select specific trial**")
+
+        # Model selector
+        available_models = sorted(models_with_temps.keys())
+        override_model = st.selectbox(
+            "Model",
+            options=['None'] + available_models,
+            format_func=lambda x: x.replace('-', ' ').title() if x != 'None' else 'Use default'
+        )
+
+        if override_model != 'None':
+            # Show trials for this model at selected temperature
+            if selected_temp_folder in models_with_temps[override_model]:
+                trial_checkpoints = sorted(models_with_temps[override_model][selected_temp_folder], key=natural_sort_key)
+                trial_names = [p.name for p in trial_checkpoints]
+
+                override_trial = st.selectbox(
+                    "Trial",
+                    options=trial_names,
+                    index=len(trial_names) - 1
+                )
+
+                # Replace the default checkpoint for this model
+                override_checkpoint_path = [p for p in trial_checkpoints if p.name == override_trial][0]
+                display_name = override_model.replace('-', ' ').title()
+                selected_checkpoints[display_name] = load_checkpoint(str(override_checkpoint_path))
+                selected_files[display_name] = override_checkpoint_path
+
+                st.success(f"✓ Using {override_trial} for {display_name}")
+
+    # Show current configuration
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("### Current View")
+    st.sidebar.markdown(f"**Temperature:** {temp_choice}")
+    st.sidebar.markdown(f"**Models shown:** {len(selected_checkpoints)}")
+    for model_name, checkpoint_path in selected_files.items():
+        st.sidebar.markdown(f"- {model_name}: `{checkpoint_path.name}`")
 
     existing_checkpoints = selected_checkpoints
 
@@ -519,16 +578,12 @@ def main():
     # Render sidebar timeline
     render_trade_timeline(existing_checkpoints, reasoning_data)
 
-    # Main content: Performance chart
-    st.subheader("Performance Over Time")
-    st.markdown("*Hover over the diamond markers at the end to see detailed metrics*")
-
     chart = create_performance_chart(existing_checkpoints)
     st.plotly_chart(chart, use_container_width=True)
 
     # Quick stats below chart
     st.markdown("---")
-    st.subheader("Quick Comparison")
+    st.subheader("Performance Comparison")
 
     cols = st.columns(len(existing_checkpoints))
 
