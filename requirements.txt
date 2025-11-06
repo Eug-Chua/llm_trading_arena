@@ -30,6 +30,7 @@ sqlalchemy>=2.0.0
 # Visualization
 plotly>=5.18.0
 matplotlib>=3.7.0
+Pillow>=10.0.0
 
 # UI (Streamlit for MVP)
 streamlit>=1.31.0
