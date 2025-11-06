@@ -78,7 +78,7 @@ Examples:
         '--model',
         type=str,
         default='anthropic',
-        choices=['anthropic', 'openai', 'deepseek'],
+        choices=['anthropic', 'openai', 'deepseek', 'alibaba', 'deepseek-terminus'],
         help='LLM model to use (default: anthropic)'
     )
     parser.add_argument(
@@ -193,6 +193,14 @@ Examples:
     logger.info("=" * 80)
 
     try:
+        # Auto-generate checkpoint path if not provided and run_id is specified
+        checkpoint_path = args.checkpoint
+        if not checkpoint_path and args.run_id is not None:
+            # Generate nested path: results/{model}/temp{temperature}/{model}_temp{temp}_trial{run_id}.pkl
+            temp_str = str(args.temperature).replace('.', '')  # 0.7 -> 07, 0.1 -> 01
+            checkpoint_path = f"results/{args.model}/temp{temp_str}/{args.model}_temp{temp_str}_trial{args.run_id}.pkl"
+            logger.info(f"Auto-generated checkpoint path: {checkpoint_path}")
+
         # Initialize backtest engine
         engine = BacktestEngine(
             start_date=start_date,
@@ -210,7 +218,7 @@ Examples:
 
         # Run backtest
         results = engine.run(
-            checkpoint_path=args.checkpoint,
+            checkpoint_path=checkpoint_path,
             save_every_n_iterations=args.save_every
         )
 
