@@ -102,42 +102,72 @@ def main():
     grouped_data = group_by_model_config(checkpoints_data)
 
     # Sidebar: Model and Temperature selectors (like Home page)
-    st.sidebar.header("Select Configuration")
-    st.sidebar.markdown("Choose one model configuration to analyze variance across its trials")
+    st.sidebar.header("Configuration")
 
-    # Extract unique models and temperatures
-    all_models = set()
-    all_temps = set()
-    for config_name in grouped_data.keys():
-        parts = config_name.split('_temp')
-        if len(parts) == 2:
-            all_models.add(parts[0])
-            all_temps.add(float(parts[1]))
+    # Extract unique models and temperature folders from checkpoint paths
+    temp_folders = {}  # {model: [temp_folders]}
+    for checkpoint_file in available_checkpoints:
+        # Parse path: results/{model}/{temp_folder}/{filename}
+        parts = checkpoint_file.parts
+        if len(parts) >= 3:
+            model = parts[-3]  # e.g., 'anthropic'
+            temp_folder = parts[-2]  # e.g., 'temp01' or 'temp07'
 
-    all_models = sorted(all_models)
-    all_temps = sorted(all_temps)
+            if model not in temp_folders:
+                temp_folders[model] = set()
+            temp_folders[model].add(temp_folder)
 
-    if not all_models or not all_temps:
-        st.error("❌ No valid model configurations found")
+    if not temp_folders:
+        st.error("❌ No valid checkpoint structure found")
+        return
+
+    # Organize by temperature sections
+    models_temp01 = [m for m, temps in temp_folders.items() if 'temp01' in temps]
+    models_temp07 = [m for m, temps in temp_folders.items() if 'temp07' in temps]
+
+    # Temperature section selector
+    available_sections = []
+    if models_temp01:
+        available_sections.append("0.1")
+    if models_temp07:
+        available_sections.append("0.7")
+
+    if not available_sections:
+        st.error("❌ No temperature data found")
+        return
+
+    temp_section = st.sidebar.radio(
+        "Temperature",
+        options=available_sections,
+        index=0
+    )
+
+    # Determine available models and temp folder for selected section
+    if temp_section == "0.1":
+        available_models = sorted(models_temp01)
+        temp_folder = "temp01"
+        temp_value = 0.1
+    else:
+        available_models = sorted(models_temp07)
+        temp_folder = "temp07"
+        temp_value = 0.7
+
+    if not available_models:
+        st.sidebar.warning(f"⚠️ No models available for this temperature")
         return
 
     # Model selector
     selected_model = st.sidebar.selectbox(
         "Model",
-        options=all_models,
+        options=available_models,
         index=0,
         format_func=lambda x: x.title()
     )
 
-    # Temperature selector
-    selected_temp = st.sidebar.selectbox(
-        "Temperature",
-        options=all_temps,
-        index=0
-    )
-
-    # Build config key
-    config_key = f"{selected_model}_temp{selected_temp}"
+    # Build config key using the actual temperature value from metadata
+    # The config key format is: {model}_temp{actual_temp_value}
+    config_key = f"{selected_model}_temp{temp_value}"
+    selected_temp = temp_value  # For backwards compatibility with rest of code
 
     if config_key not in grouped_data:
         st.error(f"❌ No trials found for {selected_model.title()} at temperature {selected_temp}")
@@ -180,8 +210,9 @@ def main():
         overall_stats_df = create_overall_stats_table(trials)
 
         # Style the dataframe with formatters while keeping numeric data
+        import math
         styled_df = overall_stats_df.style.format({
-            'Trial': lambda x: x if isinstance(x, str) else ("AVERAGE" if x == 999999 else f"{int(x)}"),
+            'Trial': lambda x: x if isinstance(x, str) else ("" if (isinstance(x, float) and math.isnan(x)) else ("AVERAGE" if x == 999999 else f"{int(x)}")),
             'Acc. Value': '${:,.0f}',
             'Return %': '{:.2f}%',
             'Std Dev %': '{:.2f}%',
@@ -205,7 +236,7 @@ def main():
 
         # Style the dataframe with formatters while keeping numeric data
         styled_df = advanced_stats_df.style.format({
-            'Trial': lambda x: x if isinstance(x, str) else ("AVERAGE" if x == 999999 else f"{int(x)}"),
+            'Trial': lambda x: x if isinstance(x, str) else ("" if (isinstance(x, float) and math.isnan(x)) else ("AVERAGE" if x == 999999 else f"{int(x)}")),
             'Acc. Value': '${:,.0f}',
             'Avg Trade Size': '${:,.0f}',
             'Median Trade Size': '${:,.0f}',
@@ -285,7 +316,7 @@ def main():
 
     # Style the dataframe with formatters while keeping numeric data
     styled_df = risk_summary_df.style.format({
-        'Trial': lambda x: x if isinstance(x, str) else ("AVERAGE" if x == 999999 else f"{int(x)}"),
+        'Trial': lambda x: x if isinstance(x, str) else ("" if (isinstance(x, float) and math.isnan(x)) else ("AVERAGE" if x == 999999 else f"{int(x)}")),
         'Sortino Ratio': '{:.2f}',
         'Std Dev': '${:,.0f}',
         'Upside Dev': '${:,.0f}',
