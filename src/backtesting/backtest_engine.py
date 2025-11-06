@@ -19,7 +19,7 @@ import time
 from .historical_loader import HistoricalDataLoader
 from .checkpoint_manager import CheckpointManager
 from ..core.trading_orchestrator import TradingOrchestrator
-from ..data.indicators import TechnicalIndicators
+from ..data.indicators import TechnicalIndicators, load_indicator_config
 from ..prompts.alpha_arena_template import AlphaArenaPrompt, MarketData
 from ..agents.llm_agent import LLMAgent
 from ..trading.trading_engine import TradingEngine
@@ -49,7 +49,7 @@ class BacktestEngine(TradingOrchestrator):
         run_id: Optional[int] = None,
         data_dir: str = "data/historical",
         checkpoint_dir: str = "results/checkpoints",
-        interval: str = "3m",
+        interval: Optional[str] = None,
         temperature: float = 0.0
     ):
         """
@@ -68,13 +68,17 @@ class BacktestEngine(TradingOrchestrator):
             interval: Decision interval ('1m', '3m', '4h')
             temperature: LLM temperature (0.0=deterministic, 0.7=creative)
         """
+        # Load indicator configuration first (needed for interval default)
+        self.indicator_config = load_indicator_config()
+
         # Backtest-specific settings
         self.start_date = start_date
         self.end_date = end_date
         self.coins = coins
         self.model = model
         self.run_id = run_id
-        self.interval = interval
+        # Use provided interval or load from config (fail loudly if missing)
+        self.interval = interval if interval is not None else self.indicator_config['data_interval']
         self.temperature = temperature
 
         # Initialize backtest-specific components
@@ -316,20 +320,36 @@ class BacktestEngine(TradingOrchestrator):
                     continue
 
             # Calculate indicators (using dataframe directly)
+            # Load indicator parameters from config - fail loudly if missing
+            ema_periods = self.indicator_config['ema_periods']
+            rsi_periods = self.indicator_config['rsi_periods']
+            atr_periods = self.indicator_config['atr_periods']
+            macd_config = self.indicator_config['macd']
+
             # EMA
-            df_primary = self.indicators.calculate_ema(df_primary, periods=[20, 50])
-            df_secondary = self.indicators.calculate_ema(df_secondary, periods=[20, 50])
+            df_primary = self.indicators.calculate_ema(df_primary, periods=ema_periods)
+            df_secondary = self.indicators.calculate_ema(df_secondary, periods=ema_periods)
 
             # MACD
-            df_primary = self.indicators.calculate_macd(df_primary)
-            df_secondary = self.indicators.calculate_macd(df_secondary)
+            df_primary = self.indicators.calculate_macd(
+                df_primary,
+                fast=macd_config['fast'],
+                slow=macd_config['slow'],
+                signal=macd_config['signal']
+            )
+            df_secondary = self.indicators.calculate_macd(
+                df_secondary,
+                fast=macd_config['fast'],
+                slow=macd_config['slow'],
+                signal=macd_config['signal']
+            )
 
             # RSI
-            df_primary = self.indicators.calculate_rsi(df_primary, periods=[7, 14])
-            df_secondary = self.indicators.calculate_rsi(df_secondary, periods=[7, 14])
+            df_primary = self.indicators.calculate_rsi(df_primary, periods=rsi_periods)
+            df_secondary = self.indicators.calculate_rsi(df_secondary, periods=rsi_periods)
 
             # ATR
-            df_secondary = self.indicators.calculate_atr(df_secondary, periods=[3, 14])
+            df_secondary = self.indicators.calculate_atr(df_secondary, periods=atr_periods)
 
             indicators_3m = df_primary
             indicators_4h = df_secondary
@@ -438,6 +458,7 @@ class BacktestEngine(TradingOrchestrator):
         # Build metadata
         metadata = {
             "model": self.model,
+            "temperature": self.temperature,
             "start_date": self.start_date,
             "end_date": self.end_date,
             "coins": self.coins,

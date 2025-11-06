@@ -34,9 +34,9 @@ class CheckpointManager:
             checkpoint_dir: Directory to store checkpoints
         """
         self.checkpoint_dir = Path(checkpoint_dir)
-        self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
+        # Don't create the directory here - let save_checkpoint create nested structure
 
-        logger.info(f"Initialized CheckpointManager with dir: {self.checkpoint_dir}")
+        logger.info(f"Initialized CheckpointManager with base dir: {self.checkpoint_dir}")
 
     def save_checkpoint(
         self,
