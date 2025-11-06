@@ -150,11 +150,10 @@ def create_volatility_scatter(trials: List[Dict]):
             colorscale='RdYlGn',  # Red (low ratio) to Green (high ratio)
             showscale=True,
             colorbar=dict(
-                title="Deviation<br>Ratio",
                 thickness=15,
-                len=0.7
+                len=0.8
             ),
-            line=dict(color='white', width=1)
+            line=dict(color='white', width=0.25)
         ),
         text=[f"T{tid}" for tid in trial_ids],
         textposition='top center',

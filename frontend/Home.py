@@ -233,6 +233,137 @@ def create_performance_chart(checkpoints_data):
     return fig
 
 
+def create_coin_performance_bubble(checkpoint, model_name):
+    """
+    Create bubble chart showing coin performance impact
+
+    X-axis: Number of trades
+    Y-axis: Total P&L (can be negative)
+    Bubble size: Average position size
+    Bubble color: Win rate %
+    """
+    from frontend.utils.visual_config import get_coin_color
+
+    coins = ['BTC', 'ETH', 'SOL', 'BNB', 'XRP', 'DOGE']
+    trade_log = checkpoint.get('trade_history', [])
+
+    # Collect data for each coin
+    coin_data = []
+
+    for coin in coins:
+        # Get all trades for this coin (BUY and CLOSE)
+        coin_trades = [t for t in trade_log if t.get('symbol') == coin]
+        closed_trades = [t for t in coin_trades if t['action'] == 'CLOSE']
+
+        if closed_trades:
+            # Calculate metrics
+            num_trades = len(closed_trades)
+            total_pnl = sum(t.get('net_pnl', 0) for t in closed_trades)
+            winning_trades = [t for t in closed_trades if t.get('net_pnl', 0) > 0]
+            win_rate = (len(winning_trades) / len(closed_trades)) * 100 if closed_trades else 0
+
+            # Calculate average position size (capital deployed)
+            buy_trades = [t for t in coin_trades if t['action'] == 'BUY']
+            avg_position_size = sum(t.get('cost', 0) for t in buy_trades) / len(buy_trades) if buy_trades else 0
+
+            coin_data.append({
+                'coin': coin,
+                'num_trades': num_trades,
+                'total_pnl': total_pnl,
+                'win_rate': win_rate,
+                'avg_position_size': avg_position_size,
+                'color': get_coin_color(coin)
+            })
+
+    if not coin_data:
+        # No trades at all, return empty chart
+        fig = go.Figure()
+        fig.add_annotation(
+            text="No trade data available",
+            xref="paper", yref="paper",
+            x=0.5, y=0.5, showarrow=False,
+            font=dict(size=16, color='#888888')
+        )
+        fig.update_layout(
+            template='plotly_dark',
+            height=500,
+            xaxis=dict(visible=False),
+            yaxis=dict(visible=False)
+        )
+        return fig
+
+    # Create bubble chart
+    fig = go.Figure()
+
+    for coin_info in coin_data:
+        # Use coin-specific color from allocation chart
+        color = coin_info['color']
+
+        # Bubble size based on average position size (normalized)
+        max_position = max(c['avg_position_size'] for c in coin_data)
+        bubble_size = (coin_info['avg_position_size'] / max_position * 40 + 10) if max_position > 0 else 20
+
+        fig.add_trace(go.Scatter(
+            x=[coin_info['num_trades']],
+            y=[coin_info['total_pnl']],
+            mode='markers+text',
+            marker=dict(
+                size=bubble_size,
+                color=color,
+                opacity=0.6,
+                line=dict(width=0)
+            ),
+            text=coin_info['coin'],
+            textposition='middle center',
+            textfont=dict(size=10, color='white'),
+            hovertemplate=(
+                f"<b>{coin_info['coin']}</b><br>"
+                f"Trades: {coin_info['num_trades']}<br>"
+                f"Total P&L: ${coin_info['total_pnl']:,.2f}<br>"
+                f"Win Rate: {coin_info['win_rate']:.1f}%<br>"
+                f"Avg Position: ${coin_info['avg_position_size']:,.2f}"
+                "<extra></extra>"
+            ),
+            showlegend=False
+        ))
+
+    # Add zero line
+    fig.add_hline(y=0, line_dash="dash", line_color="gray", opacity=0.5)
+
+    fig.update_layout(
+        title={
+            'text': f'{model_name} - Coin Impact',
+            'x': 0.5,
+            'xanchor': 'center',
+            'font': {'size': 16, 'color': '#e0e0e0'},
+            'y': 0.98,
+            'yanchor': 'top'
+        },
+        xaxis=dict(
+            title='Number of Trades',
+            gridcolor='rgba(128, 128, 128, 0.2)',
+            tickfont=dict(size=10, color='#e0e0e0'),
+            title_font=dict(size=12, color='#e0e0e0'),
+            zeroline=False
+        ),
+        yaxis=dict(
+            title='Total P&L ($)',
+            gridcolor='rgba(128, 128, 128, 0.2)',
+            tickfont=dict(size=10, color='#e0e0e0'),
+            title_font=dict(size=12, color='#e0e0e0'),
+            tickprefix='$',
+            tickformat=',.0f',
+            zeroline=False
+        ),
+        template='plotly_dark',
+        height=400,
+        hovermode='closest',
+        margin=dict(l=60, r=40, t=60, b=60)
+    )
+
+    return fig
+
+
 def create_portfolio_allocation_chart(checkpoint, model_name):
     """
     Create stacked area chart showing portfolio allocation over time
@@ -337,7 +468,7 @@ def create_portfolio_allocation_chart(checkpoint, model_name):
         y=cash_values,
         name='Cash',
         mode='lines',
-        line=dict(width=0.5, color=coin_colors['CASH']),
+        line=dict(width=0, color=coin_colors['CASH']),
         fillcolor='rgba(136, 136, 136, 0.4)',
         fill='tozeroy',
         stackgroup='one',
@@ -358,18 +489,25 @@ def create_portfolio_allocation_chart(checkpoint, model_name):
                 y=coin_allocations[coin],
                 name=coin,
                 mode='lines',
-                line=dict(width=0.5, color=color),
+                line=dict(width=0, color=color),
                 fillcolor=f'rgba({r}, {g}, {b}, 0.6)',
                 stackgroup='one',
                 hovertemplate=f'{coin}: $%{{y:,.2f}}<extra></extra>'
             ))
 
     fig.update_layout(
-        title=f'{model_name} - Portfolio Allocation Over Time',
+        title={
+            'text': f'{model_name} - Portfolio Allocation Over Time',
+            'x': 0.5,
+            'xanchor': 'center',
+            'font': {'size': 16, 'color': '#e0e0e0'},
+            'y': 0.98,
+            'yanchor': 'top'
+        },
         xaxis_title='Date',
         yaxis_title='Capital Allocation (USD)',
         template='plotly_dark',
-        height=500,
+        height=400,
         hovermode='x unified',
         yaxis=dict(tickprefix='$', tickformat=',.0f'),
         legend=dict(
@@ -598,28 +736,30 @@ def main():
 
     # Portfolio allocation comparison
     st.markdown("---")
-    st.subheader("Portfolio Allocation Behavior")
-    st.markdown("*Comparing how each model allocates capital across coins and cash over time*")
+    st.subheader("Portfolio Allocation & Coin Performance")
+    st.markdown("*Comparing capital allocation behavior and per-coin impact*")
 
-    # Create side-by-side allocation charts
-    if len(existing_checkpoints) == 2:
+    # Show allocation + bubble chart for each model (side by side)
+    for model_name, checkpoint in existing_checkpoints.items():
+        # Create 2 columns for this model
         cols = st.columns(2)
 
-        for idx, (model_name, checkpoint) in enumerate(existing_checkpoints.items()):
-            with cols[idx]:
-                allocation_chart = create_portfolio_allocation_chart(checkpoint, model_name)
-                if allocation_chart:
-                    st.plotly_chart(allocation_chart, use_container_width=True)
-                else:
-                    st.warning(f"No trade data available for {model_name}")
-    else:
-        # Single model or > 2 models - show in single column
-        for model_name, checkpoint in existing_checkpoints.items():
+        # Column 1: Allocation chart
+        with cols[0]:
             allocation_chart = create_portfolio_allocation_chart(checkpoint, model_name)
             if allocation_chart:
                 st.plotly_chart(allocation_chart, use_container_width=True)
             else:
                 st.warning(f"No trade data available for {model_name}")
+
+        # Column 2: Bubble chart
+        with cols[1]:
+            bubble_chart = create_coin_performance_bubble(checkpoint, model_name)
+            st.plotly_chart(bubble_chart, use_container_width=True)
+
+        # Add spacing between model rows
+        if len(existing_checkpoints) > 1:
+            st.markdown("<br>", unsafe_allow_html=True)
 
 
 if __name__ == "__main__":
