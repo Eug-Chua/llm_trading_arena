@@ -7,7 +7,6 @@ Shows comparative performance between different LLM trading models.
 
 import streamlit as st
 import pickle
-import pandas as pd
 import plotly.graph_objects as go
 from pathlib import Path
 import sys
@@ -277,7 +276,6 @@ def create_portfolio_allocation_chart(checkpoint, model_name):
             # Open position
             quantity = trade.get('quantity', 0)
             price = trade.get('price', 0)
-            cost = trade.get('cost', 0)
             leverage = trade.get('leverage', 1)
 
             # Notional value (total position value)
@@ -446,10 +444,8 @@ def main():
     # Get all available checkpoint files with natural sort (recursively)
     from frontend.utils.checkpoint_utils import natural_sort_key
     checkpoint_paths = sorted([f for f in results_dir.rglob("*.pkl")], key=natural_sort_key)
-    available_checkpoints = [p.name for p in checkpoint_paths]
-    checkpoint_path_map = {p.name: p for p in checkpoint_paths}  # Map filename to full path
 
-    if not available_checkpoints:
+    if not checkpoint_paths:
         st.error("❌ No checkpoint files found in results/")
         st.info("Run a backtest first: `python scripts/run_backtest.py --start 2025-10-18 --end 2025-10-30 --model anthropic --run-id 1`")
         return
