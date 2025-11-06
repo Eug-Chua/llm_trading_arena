@@ -55,6 +55,12 @@ data/cache/*
 !data/cache/.gitkeep
 data/historical/*
 !data/historical/.gitkeep
+data/archive
+
+# Results cache
+results/archive
+results/reports
+results/csv
 
 # NoF1 archived data (research reference only)
 data/archive/nof1/*
