@@ -209,7 +209,7 @@ class LLMAgent(BaseLLMAgent):
         Args:
             provider_config: Provider configuration dict
         """
-        if self.provider in ['deepseek', 'openai', 'google', 'xai', 'alibaba']:
+        if self.provider in ['deepseek', 'deepseek-terminus', 'openai', 'google', 'xai', 'alibaba']:
             # OpenAI-compatible API
             if 'base_url' not in provider_config:
                 raise ValueError(
@@ -236,7 +236,7 @@ class LLMAgent(BaseLLMAgent):
         else:
             raise ValueError(
                 f"Provider '{self.provider}' not supported.\n"
-                f"Supported providers: deepseek, openai, anthropic, google, xai, alibaba\n"
+                f"Supported providers: deepseek, deepseek-terminus, openai, anthropic, google, xai, alibaba\n"
                 f"Please check config/models.yaml for available providers."
             )
 
