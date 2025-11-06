@@ -1,0 +1,55 @@
+# Frontend Visual Configuration
+# Centralized settings for colors, chart sizing, and UI defaults
+
+# Model colors - must match across all charts
+model_colors:
+  anthropic: '#DE7356'        # Claude orange-red
+  openai: '#74AA9C'           # OpenAI teal
+  deepseek: '#4D6BFE'         # DeepSeek blue
+  deepseek-terminus: '#4D6BFE' # DeepSeek Terminus blue
+  qwen: '#8b5cf6'             # Qwen purple
+  alibaba: '#ffa07a'          # Alibaba salmon
+
+# Coin colors (for portfolio allocation charts)
+coin_colors:
+  BTC: '#F7931A'   # Bitcoin orange
+  ETH: '#627EEA'   # Ethereum blue
+  SOL: '#14F195'   # Solana green
+  BNB: '#F3BA2F'   # Binance yellow
+  XRP: '#23292F'   # XRP black
+  DOGE: '#C2A633'  # Doge gold
+  CASH: '#888888'  # Cash gray
+
+# Chart dimensions
+chart_dimensions:
+  performance_chart_height: 600
+  candlestick_chart_height: 900
+  portfolio_allocation_height: 500
+  statistical_chart_height: 500
+
+# UI defaults
+ui_defaults:
+  default_temperature: 0.7  # Default temperature selection
+  show_legends: false       # Hide legends by default
+
+# Trading indicators colors (EMA, RSI, MACD)
+indicator_colors:
+  ema_20: '#00d4ff'    # Cyan
+  ema_50: '#ffd700'    # Gold
+  rsi: '#00d4ff'       # Cyan
+  macd: '#00d4ff'      # Cyan
+  macd_signal: '#ff6b6b'  # Red
+  macd_histogram_positive: '#00ff88'  # Green
+  macd_histogram_negative: '#ff4444'  # Red
+
+# Candlestick colors
+candlestick_colors:
+  increasing: '#00ff88'  # Green
+  decreasing: '#ff4444'  # Red
+
+# Trade markers
+trade_markers:
+  default_size: 14
+  highlighted_size: 30
+  opacity: 0.8
+  highlighted_opacity: 0.9
