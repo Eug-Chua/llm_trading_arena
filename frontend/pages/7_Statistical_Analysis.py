@@ -376,65 +376,85 @@ def main():
     else:
         st.info("Capture ratios require historical market data. Ensure data is available in data/historical/")
 
+    # Per-Coin Summary Tables
+    st.subheader("Per-Coin Performance Summary")
+    st.markdown("**Aggregated statistics across all trials - which coins were most profitable?**")
+
+    from frontend.utils.coin_analysis import calculate_per_coin_stats, calculate_per_coin_capture_ratios_summary
+
+    # Calculate per-coin P&L stats
+    coin_pnl_df = calculate_per_coin_stats(trials)
+
+    # Calculate per-coin capture ratio summary
+    coin_capture_df = calculate_per_coin_capture_ratios_summary(trials, coins)
+
+    # Display side-by-side
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.markdown("**Total P&L by Coin**")
+
+        # Use Streamlit's column_config for proper formatting without losing numerical sorting
+        st.dataframe(
+            coin_pnl_df,
+            hide_index=True,
+            use_container_width=True,
+            column_config={
+                'Coin': st.column_config.TextColumn('Coin', width='small'),
+                'Trades': st.column_config.NumberColumn('Trades', format='%d'),
+                'Total P&L': st.column_config.NumberColumn('Total P&L', format='$%d'),
+                'Win Rate': st.column_config.NumberColumn('Win Rate', format='%.1f%%'),
+                'Avg P&L/Trade': st.column_config.NumberColumn('Avg P&L/Trade', format='$%d'),
+                'Best Trade': st.column_config.NumberColumn('Best Trade', format='$%d'),
+                'Worst Trade': st.column_config.NumberColumn('Worst Trade', format='$%d'),
+            }
+        )
+
+    with col2:
+        st.markdown("**Average Capture Ratios by Coin**")
+
+        if not coin_capture_df.empty:
+            st.dataframe(
+                coin_capture_df,
+                hide_index=True,
+                use_container_width=True,
+                column_config={
+                    'Coin': st.column_config.TextColumn('Coin', width='small'),
+                    'Avg Upside Capture': st.column_config.NumberColumn('Avg Upside Capture', format='%.1f%%'),
+                    'Avg Downside Capture': st.column_config.NumberColumn('Avg Downside Capture', format='%.1f%%'),
+                    'Upside Std Dev': st.column_config.NumberColumn('Upside Std Dev', format='%.1f%%'),
+                    'Downside Std Dev': st.column_config.NumberColumn('Downside Std Dev', format='%.1f%%'),
+                    'Trials': st.column_config.NumberColumn('Trials', format='%d'),
+                }
+            )
+        else:
+            st.info("No capture ratio data available")
+
+    # Key insights
+    st.markdown("**Key Insights:**")
+
+    if not coin_pnl_df.empty:
+        best_coin = coin_pnl_df.iloc[0]
+        worst_coin = coin_pnl_df.iloc[-1]
+        most_traded = coin_pnl_df.loc[coin_pnl_df['Trades'].idxmax()]
+
+        st.markdown(f"- **Most profitable coin:** {best_coin['Coin']} (${best_coin['Total P&L']:,.2f} total P&L, {best_coin['Win Rate']:.1f}% win rate)")
+        st.markdown(f"- **Least profitable coin:** {worst_coin['Coin']} (${worst_coin['Total P&L']:,.2f} total P&L, {worst_coin['Win Rate']:.1f}% win rate)")
+        st.markdown(f"- **Most traded coin:** {most_traded['Coin']} ({most_traded['Trades']} total trades across all trials)")
+
+        if not coin_capture_df.empty:
+            # Find coin with best upside capture
+            best_upside_idx = coin_capture_df['Avg Upside Capture'].idxmax()
+            best_upside_coin = coin_capture_df.loc[best_upside_idx]
+
+            # Find coin with best downside protection (lowest downside capture)
+            best_downside_idx = coin_capture_df['Avg Downside Capture'].idxmin()
+            best_downside_coin = coin_capture_df.loc[best_downside_idx]
+
+            st.markdown(f"- **Best upside capture:** {best_upside_coin['Coin']} ({best_upside_coin['Avg Upside Capture']:.1f}% avg - model captured {best_upside_coin['Avg Upside Capture']:.0f}% of up-moves)")
+            st.markdown(f"- **Best downside protection:** {best_downside_coin['Coin']} ({best_downside_coin['Avg Downside Capture']:.1f}% avg - model avoided {100-best_downside_coin['Avg Downside Capture']:.0f}% of down-moves)")
+
     st.markdown("---")
-
-    # # Statistical Significance & Confidence Intervals
-    # st.header("Statistical Significance & Performance Confidence")
-    # st.markdown("""
-    # **Is this model's performance statistically significant or just luck?**
-
-    # Using {}-trial sample to determine:
-    # - **95% Confidence Intervals**: Range where true mean likely falls
-    # - **P-Value**: Probability results are due to chance (p < 0.05 = significant)
-    # - **Probability > 0**: Likelihood of positive outcome on next trial
-
-    # **Interpretation:**
-    # - **Significant = Yes (p < 0.05)**: Performance is statistically meaningful, not random luck
-    # - **Significant = No (p ≥ 0.05)**: Need more trials to confirm if performance is real
-    # - **Narrow CI**: Consistent, predictable performance
-    # - **Wide CI**: High variance, outcomes less predictable
-    # """.format(len(trials)))
-
-    # # Display confidence interval table
-    # ci_table = create_confidence_interval_table(trials)
-
-    # # Style the dataframe with formatters while keeping numeric data
-    # styled_df = ci_table.style.format({
-    #     'Mean': '{:.2f}',
-    #     'CI Lower': '{:.2f}',
-    #     'CI Upper': '{:.2f}',
-    #     'Std Dev': '{:.2f}',
-    #     'P-Value': '{:.4f}',
-    #     'Prob > 0': '{:.0f}%'
-    # })
-
-    # st.dataframe(
-    #     styled_df,
-    #     use_container_width=True,
-    #     hide_index=True
-    # )
-
-    # # Add interpretation summary
-    # stats = calculate_statistical_significance(trials)
-    # return_stats = stats.get('Return %')
-
-    # if return_stats:
-    #     st.markdown("### Summary")
-    #     if return_stats['is_significant']:
-    #         st.success(f"""
-    #         **✓ Statistically Significant Performance**
-    #         - Mean return: **{return_stats['mean']:.2f}%** (95% CI: {return_stats['ci_lower']:.2f}% to {return_stats['ci_upper']:.2f}%)
-    #         - Probability of positive return on next trial: **{return_stats['prob_positive']:.0f}%**
-    #         - This performance is **unlikely due to random chance** (p={return_stats['p_value']:.4f})
-    #         """)
-    #     else:
-    #         st.warning(f"""
-    #         **⚠ Not Yet Statistically Significant**
-    #         - Mean return: **{return_stats['mean']:.2f}%** (95% CI: {return_stats['ci_lower']:.2f}% to {return_stats['ci_upper']:.2f}%)
-    #         - P-value: {return_stats['p_value']:.4f} (need p < 0.05)
-    #         - **Recommendation**: Run more trials to confirm if performance is real or luck
-    #         """)
-
 
 if __name__ == "__main__":
     main()
