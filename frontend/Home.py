@@ -196,6 +196,97 @@ def create_performance_chart(checkpoints_data):
         annotation_position="right"
     )
 
+    # Add benchmark lines (Buy-and-Hold BTC and Equal-Weight Portfolio)
+    # Load benchmark historical data for the same period
+    import pandas as pd
+    try:
+        # Load BTC historical data
+        btc_file = project_root / "data/archive/historical/4h/BTC.parquet"
+        if btc_file.exists() and min_date and max_date:
+            btc_df = pd.read_parquet(btc_file)
+            btc_df['timestamp'] = pd.to_datetime(btc_df['timestamp'])
+
+            # Filter to same period as backtests
+            mask = (btc_df['timestamp'] >= min_date) & (btc_df['timestamp'] <= max_date)
+            btc_period = btc_df[mask].sort_values('timestamp')
+
+            if len(btc_period) > 0:
+                # Calculate buy-and-hold equity curve
+                entry_price = btc_period.iloc[0]['close']
+                btc_timestamps = btc_period['timestamp'].tolist()
+                btc_values = [(price / entry_price) * 10000 for price in btc_period['close']]
+
+                # Add Buy-and-Hold BTC line
+                fig.add_trace(go.Scatter(
+                    x=btc_timestamps,
+                    y=btc_values,
+                    mode='lines',
+                    name='Buy-and-Hold BTC',
+                    line=dict(color='rgba(255, 165, 0, 0.3)', width=2, dash='dash'),
+                    hovertemplate=(
+                        "<b>Buy-and-Hold BTC (Benchmark)</b><br>" +
+                        "Date: %{x|%Y-%m-%d %H:%M}<br>" +
+                        "Value: $%{y:,.2f}<br>" +
+                        "<extra></extra>"
+                    ),
+                    showlegend=True
+                ))
+
+            # Calculate equal-weight portfolio
+            coins = ["BTC", "ETH", "SOL", "BNB", "XRP", "DOGE"]
+            capital_per_coin = 10000 / len(coins)
+            equal_weight_values = []
+
+            # Load all coin data
+            coin_data = {}
+            all_coins_available = True
+            for coin in coins:
+                coin_file = project_root / f"data/archive/historical/4h/{coin}.parquet"
+                if coin_file.exists():
+                    df = pd.read_parquet(coin_file)
+                    df['timestamp'] = pd.to_datetime(df['timestamp'])
+                    mask = (df['timestamp'] >= min_date) & (df['timestamp'] <= max_date)
+                    coin_data[coin] = df[mask].sort_values('timestamp')
+                else:
+                    all_coins_available = False
+                    break
+
+            if all_coins_available and btc_timestamps:
+                # Calculate portfolio value at each timestamp
+                for ts in btc_timestamps:
+                    portfolio_value = 0
+                    for coin in coins:
+                        coin_df = coin_data[coin]
+                        # Find price at this timestamp
+                        coin_row = coin_df[coin_df['timestamp'] == ts]
+                        if not coin_row.empty:
+                            current_price = coin_row.iloc[0]['close']
+                            entry_price_coin = coin_data[coin].iloc[0]['close']
+                            # Value of this coin position
+                            coin_value = capital_per_coin * (current_price / entry_price_coin)
+                            portfolio_value += coin_value
+                    equal_weight_values.append(portfolio_value)
+
+                # Add Equal-Weight Portfolio line
+                if len(equal_weight_values) == len(btc_timestamps):
+                    fig.add_trace(go.Scatter(
+                        x=btc_timestamps,
+                        y=equal_weight_values,
+                        mode='lines',
+                        name='Equal-Weight Portfolio',
+                        line=dict(color='rgba(128, 128, 128, 0.3)', width=2, dash='dot'),
+                        hovertemplate=(
+                            "<b>Equal-Weight Portfolio (Benchmark)</b><br>" +
+                            "Date: %{x|%Y-%m-%d %H:%M}<br>" +
+                            "Value: $%{y:,.2f}<br>" +
+                            "<extra></extra>"
+                        ),
+                        showlegend=True
+                    ))
+    except Exception:
+        # Silently skip benchmarks if data loading fails
+        pass
+
     # Layout
     fig.update_layout(
         title={
