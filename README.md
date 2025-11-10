@@ -1,155 +1,319 @@
 # LLM Trading Arena
 
-This project seeks to replicate [Alpha Arena](https://nof1.ai/) by Nof1.ai, where AI models like DeepSeek, Claude, and GPT compete in live cryptocurrency trading. Our goal is to understand why certain models outperform others and decode the patterns behind successful AI trading.
+**Rigorous statistical evaluation of LLM-based cryptocurrency trading strategies with proper experimental controls**
+
+Inspired by [Alpha Arena](https://nof1.ai/) by Nof1.ai, this project systematically evaluates whether large language models can trade cryptocurrency markets autonomously, and more importantly, *why* certain configurations perform better than others.
+
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ---
 
-## What is This Project?
+## Project Overview
 
-**Alpha Arena** is a groundbreaking experiment by Nof1.ai that tests whether LLMs can function as systematic trading agents in real-world, dynamic environments. Unlike static AI benchmarks, Alpha Arena evaluates decision-making capabilities with real capital, live market data, and consequential execution.
+**What was tested:**
+- 2 LLM models: Anthropic Claude Sonnet 4.5, OpenAI GPT-4o-mini
+- 2 temperature settings: 0.1 (deterministic) and 0.7 (creative)
+- **40 backtests total** (2 models × 2 temps × 10 trials each)
+- 13-day period (Oct 17-30, 2025) with 4-hour decision cycles
+- 6 cryptocurrencies: BTC, ETH, SOL, BNB, XRP, DOGE
 
-**Six leading LLMs** (DeepSeek, Claude, GPT-5, Gemini, Grok 4, Qwen 3) trade cryptocurrency perpetual futures on Hyperliquid with:
-- **$10,000 each** in real capital
-- **Identical prompts** and system configurations
-- **Live market data** (prices, technical indicators, volume)
-- **No news or narratives** - pure numerical trading
-- **~2-3 minute decision cycles** (mid-to-low frequency trading)
-
-### Our Replication Goals
-
-This project aims to replicate and extend Alpha Arena's research by:
-1. **Reproducing the exact trading environment** (prompt format, data pipeline, execution logic)
-2. **Testing LLMs head-to-head** in controlled, reproducible conditions
-3. **Understanding behavioral differences** across models (risk profiles, biases, patterns)
-
-**Key Research Questions:**
-- Can LLMs trade systematically with minimal guidance (zero-shot capability)?
-- What decision-loop components can safely run autonomously vs. where do models fail?
-- Do models exhibit distinct risk profiles, directional biases, and sizing preferences?
-
-*Note: All agents receive the same user prompt template. System prompts are proprietary to Nof1.ai.*
+**What was analyzed:**
+- Statistical significance testing (t-tests, p-values)
+- Risk-adjusted returns (Sharpe, Sortino ratios)
+- Per-coin performance breakdown
+- Capture ratios (timing quality measurement)
+- Behavioral patterns (leverage choices, hold times)
+- Benchmark comparisons (buy-and-hold, equal-weight portfolio)
 
 ---
 
-## Why This Matters
+## Key Findings
 
-### The Big Question
-Can LLMs actually trade? Do they reliably follow simple risk rules? Which parts of the decision loop can be trusted to run autonomously? Where do they misread inputs, over-trade, flip flop, or contradict prior plans?
+### 1. Only One Statistically Significant Result
+Out of 6 model comparisons, only **1 showed statistical significance** (p < 0.05):
+- **OpenAI temp 0.1 outperformed Anthropic temp 0.1** (p=0.025)
+- Mean difference: 12.32 percentage points (1.40% vs -10.92%)
 
-### What We're Learning
+**Why so few significant results?**
+- High variance (Anthropic temp 0.7 ranged from -36% to +56%)
+- Small sample size (10 trials per config)
+- Short time period (13 days)
 
-1. **Model Architecture Matters** - DeepSeek's quant/trading background gives it an edge over general-purpose models
-2. **Less is More** - Models perform better with minimal trading rules vs. explicit instructions
-3. **Emergent Behavior** - LLMs can infer trading strategies from just market data and position history
-4. **Risk Management** - The best models are conservative, not aggressive
+### 2. Timing Matters More Than Direction
 
-### Real-World Implications
-- **AI in Finance** - Understanding which LLMs work for trading (and why)
-- **Prompt Engineering** - How much guidance do models actually need?
-- **Model Selection** - DeepSeek costs 1/10th of GPT-4 but outperforms it in trading
+**The XRP Paradox:**
+- XRP was the only coin that rallied (+4.7% during test period)
+- Yet Anthropic temp 0.1 **lost $7,731** trading it (worst per-coin result)
+- While making money on coins that declined (ETH: -2.6% market, +$9,896 P&L)
 
----
+**Insight:** Execution quality (timing + leverage) dominated asset selection
 
-## How It Works
+### 3. Temperature Effects Are Model-Specific
 
-The system operates in a continuous loop:
+**Anthropic:**
+- Temp 0.1: -10.92% mean (worst overall)
+- Temp 0.7: +3.60% mean (best overall)
+- **2.5× more variance** at temp 0.7 (35.5% vs 14.1% std dev)
 
-```
-1. Fetch Market Data (BTC, ETH, SOL, BNB, XRP, DOGE)
-   ↓
-2. Calculate Technical Indicators (EMA, MACD, RSI, ATR)
-   ↓
-3. Generate Alpha Arena-Style Prompt
-   ↓
-4. Send to LLM (DeepSeek, GPT, Claude, etc.)
-   ↓
-5. Parse LLM Response (Chain of Thought + Trade Signals)
-   ↓
-6. Execute Trades (Buy/Hold/Close positions)
-   ↓
-7. Track Performance (Returns, Sharpe Ratio, etc.)
-   ↓
-   Loop back to step 1 (every 3 minutes)
-```
+**OpenAI:**
+- Temp 0.1: +1.4% mean (best risk-adjusted)
+- Temp 0.7: -0.3% mean
+- **Minimal variance difference** (7.3% vs 6.2% std dev)
 
-### Technical Indicators
+**Takeaway:** Temperature recommendations are not universal across models
 
-The system uses 5 core technical indicators to analyze market conditions. All parameters are configured in `config/indicators.yaml`:
+### 4. Leverage Was a Deliberate Choice, Not a Constraint
 
-#### Price & Trend Indicators
-- **EMA (Exponential Moving Average)**: 20-period (short-term trend) and 50-period (long-term trend)
-  - Used for trend identification and crossover signals
-  - EMA20 > EMA50 = bullish, EMA20 < EMA50 = bearish
+**No leverage limits were imposed** - models freely chose their own:
+- Anthropic consistently selected **~15x leverage** (both temps)
+- OpenAI consistently selected **10x leverage** (both temps)
+- This difference amplified both wins and losses
 
-#### Momentum & Oscillators
-- **RSI (Relative Strength Index)**: 7-period (fast) and 14-period (standard)
-  - Identifies overbought (>70) and oversold (<30) conditions
-  - Helps time entries and exits based on momentum extremes
+### 5. Risk/Reward by Coin (Upside vs Downside Capture)
 
-- **MACD (Moving Average Convergence Divergence)**: 12/26/9 configuration
-  - Fast: 12-period, Slow: 26-period, Signal: 9-period
-  - Detects momentum shifts and trend changes
-  - Bullish when MACD line crosses above signal line
+**Best risk/reward - Anthropic temp 0.7 on SOL:**
+- Upside capture: **463.6%** vs Downside capture: 316.5%
+- Ratio: **1.46** (captures 46% more upside than downside)
 
-#### Volatility & Volume
-- **ATR (Average True Range)**: 3-period (fast) and 14-period (standard)
-  - Measures market volatility for position sizing and stop-loss placement
-  - Higher ATR = wider stops, lower position size
+**Worst risk/reward - Anthropic temp 0.1 on XRP:**
+- Upside capture: 262.0% vs Downside capture: **438.0%**
+- Ratio: **0.60** (captures 66% more downside than upside)
 
-- **Volume**: Raw trading volume for trend confirmation
-  - High volume + price move = strong trend
-  - Low volume + price move = weak/unreliable trend
-
-#### Perpetuals-Specific Metrics
-For crypto perpetual futures, the system also provides:
-- **Open Interest**: Total outstanding derivative positions (market positioning)
-- **Funding Rate**: Periodic payment between longs and shorts (market sentiment)
-
-All indicators operate on **4-hour candle data** for mid-frequency trading decisions.
-
-### Example LLM Response
-
-```
-# CHAIN OF THOUGHT
-
-BTC: Current price $114,250 vs entry $110,000. Up $2,000.
-Stop-loss at $108k, invalidation below $105k. Price safely above both.
-RSI 73 shows momentum without being overbought. MACD positive.
-Decision: HOLD - let this winner run.
-
-ETH: Price $4,118 vs entry $4,100. Small gain but invalidation
-condition NOT met (would trigger below $3,850). Holding.
-
-# TRADING DECISIONS
-
-{
-  "BTC": {"signal": "hold", "quantity": 0.5, ...},
-  "ETH": {"signal": "hold", "quantity": 5.0, ...}
-}
-```
-
-The system parses this, validates it, and executes the trades.
+**OpenAI's best - temp 0.7 on BTC:**
+- Upside capture: **466.7%** vs Downside capture: 405.9%
+- Ratio: **1.15** (favorable timing)
 
 ---
 
-## ⚠️ Disclaimer
+## Performance Summary
 
-**This project is for research and educational purposes only.**
+**Ranked by Mean Return:**
 
-- Not financial advice
-- No guarantees of profitability
-- Cryptocurrency trading involves significant risk
-- Test thoroughly before risking real money
-- Past performance ≠ future results
+| Model | Temp | Mean Return | Std Dev | Sharpe | Best Trial | Worst Trial |
+|-------|------|-------------|---------|--------|------------|-------------|
+| Anthropic | 0.7 | **+3.6%** | 35.5% | -1.53 | +55.6% | -35.9% |
+| OpenAI | 0.1 | +1.4% | 7.3% | **1.18** | +12.3% | -10.8% |
+| OpenAI | 0.7 | -0.3% | 6.2% | -0.38 | +7.6% | -11.4% |
+| Anthropic | 0.1 | -10.9% | 14.1% | -2.41 | +4.6% | -39.9% |
 
-We're studying AI capabilities, not selling a trading system.
+**Benchmarks:**
+- Buy-and-Hold BTC: +0.07%
+- Equal-Weight Portfolio (6 coins): -1.23%
+
+**Winner:** Anthropic temp 0.7 beat both benchmarks but with extreme variance
+
+**Most Consistent:** OpenAI temp 0.1 (best Sharpe ratio, only statistically proven edge)
+
+---
+
+## Technical Highlights
+
+### Statistical Rigor
+- Proper hypothesis testing (two-sample t-tests)
+- Sample standard deviations with Bessel's correction (n-1)
+
+### Advanced Metrics
+- **Capture ratios:** Measured upside/downside timing quality per coin
+- **Risk asymmetry:** Upside vs downside deviation analysis
+- **Distribution shape:** Skewness and kurtosis across trials
+- **Per-coin breakdown:** Total P&L, win rate, best/worst trades
+
+### Interactive Dashboard
+Built with Streamlit featuring:
+- Multi-trial equity curve overlays
+- Return distributions and risk-return scatter plots
+- Per-coin performance tables (sortable)
+- Capture ratio visualizations
+- Statistical significance tables
+
+---
+
+## Tech Stack
+
+**Languages & Libraries:**
+- Python 3.10+
+- Pandas, NumPy (data processing)
+- SciPy (statistical testing)
+- Plotly (interactive visualizations)
+- Streamlit (frontend)
+
+**APIs:**
+- Anthropic Claude API
+- OpenAI GPT API
+- Hyperliquid API
+
+**Statistical Methods:**
+- Two-sample t-tests
+- Risk-adjusted performance metrics
+- Capture ratio analysis
+
+---
+
+## Project Structure
+
+```
+llm_trading_arena/
+├── src/
+│   ├── agents/               # LLM agents (Claude, GPT)
+│   ├── analysis/             # Performance analysis
+│   ├── backtesting/          # Core backtesting engine
+│   ├── core/                 # Core components
+│   ├── data/                 # Data fetching & processing
+│   ├── metrics/              # Performance metrics
+│   ├── prompts/              # Prompt templates
+│   ├── trading/              # Trading logic
+│   └── utils/                # Utilities
+├── scripts/
+│   ├── run_backtest.py       # Main execution script
+│   ├── statistical_analysis.py
+│   └── benchmark_strategies.py
+├── frontend/
+│   ├── Home.py               # Streamlit dashboard
+│   └── pages/                # Dashboard pages
+├── config/                   # Configuration files
+├── data/                     # Historical price data
+├── results/
+│   ├── statistical_analysis/ # CSV summaries
+│   └── [model]/temp[XX]/     # Trial checkpoints
+├── FINDINGS.md               # Detailed written analysis
+├── EXPERIMENTAL_SETUP.md     # Methodology documentation
+└── README.md                 # This file
+```
+
+---
+
+## Quick Start
+
+### Installation
+
+```bash
+# Clone repository
+git clone https://github.com/yourusername/llm_trading_arena.git
+cd llm_trading_arena
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Set up API keys
+cp .env.example .env
+# Edit .env with your Anthropic/OpenAI API keys
+```
+
+### Run Backtest
+
+```bash
+# Run single trial
+python scripts/run_backtest.py \
+  --model anthropic \
+  --temperature 0.7 \
+  --start 2025-10-17 \
+  --end 2025-10-31 \
+  --run-id 1
+
+# Run multiple trials (bash loop)
+for i in {1..10}; do
+  python scripts/run_backtest.py \
+    --model openai \
+    --temperature 0.1 \
+    --start 2025-10-17 \
+    --end 2025-10-31 \
+    --run-id $i
+done
+```
+
+### View Results
+
+```bash
+# Launch interactive dashboard
+streamlit run frontend/Home.py
+
+# Generate statistical analysis
+python scripts/statistical_analysis.py
+```
+
+---
+
+## Documentation
+
+**Detailed Guides:**
+- **[FINDINGS.md](FINDINGS.md)** - Complete statistical analysis and insights (recommended starting point)
+- **[EXPERIMENTAL_SETUP.md](EXPERIMENTAL_SETUP.md)** - Experimental design, parameters, assumptions
+- **[STATISTICAL_ANALYSIS_GUIDE.md](STATISTICAL_ANALYSIS_GUIDE.md)** - Understanding variance and significance
+- **[MODEL_COMPARISON_GUIDE.md](MODEL_COMPARISON_GUIDE.md)** - Head-to-head performance analysis
+
+---
+
+## Limitations & Caveats
+
+**This project has important limitations:**
+
+1. **Small Sample Size**
+   - 10 trials per configuration (minimal for statistical inference)
+   - 13-day period (cannot separate skill from luck)
+   - Single time period (regime-dependent results)
+
+2. **No Out-of-Sample Validation**
+   - Tested on same period used for benchmarks
+   - No walk-forward analysis
+   - Results may not generalize to other periods
+
+3. **Backtest vs Reality Gap**
+   - Perfect execution (no slippage)
+   - Historical data (look-ahead bias possible)
+   - No transaction cost variations
+
+4. **Statistical Power**
+   - High variance limits ability to detect small effects
+   - Most comparisons not statistically significant
+   - Cannot make strong causal claims
+
+For production deployment, you would need:
+- 3-6 months of data minimum
+- 30-50 trials per configuration
+- Multiple market regimes tested
+
+---
+
+## Future Improvements
+
+1. **Extended Validation**
+   - Test on 3+ additional time periods
+   - Walk-forward optimization framework
+   - Robustness checks (fees, leverage, intervals)
+
+2. **Machine Learning Components**
+   - Train classifier to predict optimal coin selection
+   - Feature importance analysis (what drives success?)
+   - Regime classification (trending vs ranging markets)
+
+3. **Production Deployment**
+   - REST API for predictions
+   - Model monitoring dashboard
+   - Docker containerization + cloud deployment
+
+4. **Broader Analysis**
+   - Factor analysis (Fama-French style)
+   - Portfolio optimization
+   - Transaction cost modeling
 
 ---
 
 ## Acknowledgments
 
-- **Nof1.ai** - For creating Alpha Arena and making the competition public
-- **Hyperliquid** - For free, high-quality market data APIs
+- **Nof1.ai** - For creating Alpha Arena and inspiring this research
+- **HyperLiquid** - For their open and accessible API
 
+---
 
-*Last Updated: October 2025*
+## License
+
+MIT License - See [LICENSE](LICENSE) for details
+
+---
+
+**Note:** This is a research/educational project. Not financial advice. Trade at your own risk.
+
+---
+
+*Last Updated: November 2025*
