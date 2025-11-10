@@ -36,7 +36,7 @@
 
 ### Our Replication Study
 
-Inspired by Alpha Arena's pioneering work, this project replicates their methodology in a controlled backtesting environment to enable deeper statistical analysis.
+Inspired by Alpha Arena's pioneering work, this project replicates their methodology in a controlled backtesting environment to enable deeper statistical analycan ysis.
 
 **Key differences from the original Alpha Arena:**
 
@@ -145,7 +145,7 @@ Inspired by Alpha Arena's pioneering work, this project replicates their methodo
 
 **Key Differences:**
 - **Anthropic trades faster at temp 0.7:** 16.2 hrs vs 27.7 hrs - nearly 2x faster turnover
-- **Despite identical win rates, outcomes differ:** Anthropic's combination of higher leverage + faster trading led to higher mean return but also extreme variance (±55%)
+- **Despite similar win rates, outcomes differ:** Anthropic's combination of higher leverage + faster trading led to higher mean return but also extreme variance (±55%)
 - **High variance cancels out statistical significance:** Anthropic's wild swings mean the 3.90% difference could easily be luck
 
 ### Temperature Effects (0.1 vs 0.7)
@@ -157,7 +157,7 @@ Inspired by Alpha Arena's pioneering work, this project replicates their methodo
 | Anthropic | -10.92% | 3.60% | -14.52% | 0.245 | No |
 | OpenAI | 1.40% | -0.30% | 1.70% | 0.583 | No |
 
-**Interpretation:** Temperature changes did NOT produce statistically significant differences in either model. The observed differences could be due to random variation rather than a true temperature effect.
+**Interpretation:** Temperature changes did NOT produce statistically significant differences in either model. The observed differences could be due to random variance rather than a true temperature effect.
 
 #### Impact on Consistency
 
@@ -187,12 +187,12 @@ Inspired by Alpha Arena's pioneering work, this project replicates their methodo
 
 **Mean Returns Across 10 Trials:**
 
-| Model | Temperature | Mean Return | Std Dev | Range (Min to Max) | Median |
-|-------|-------------|-------------|---------|-------------------|--------|
-| Anthropic | 0.1 | -10.92% | 14.14% | -39.87% to +4.63% | -7.29% |
-| Anthropic | 0.7 | 3.60% | 35.51% | -35.87% to +55.59% | -7.67% |
-| OpenAI | 0.1 | 1.40% | 7.34% | -10.77% to +12.29% | 0.05% |
-| OpenAI | 0.7 | -0.30% | 6.21% | -11.39% to +7.63% | -0.07% |
+| Model | Temperature | Mean Return | Std Dev | Range (Min to Max) |
+|-------|-------------|-------------|---------|-------------------|
+| Anthropic | 0.1 | -10.92% | 14.14% | -39.87% to +4.63% | 
+| Anthropic | 0.7 | 3.60% | 35.51% | -35.87% to +55.59% | 
+| OpenAI | 0.1 | 1.40% | 7.34% | -10.77% to +12.29% | 
+| OpenAI | 0.7 | -0.30% | 6.21% | -11.39% to +7.63% |
 
 **Benchmarks (Single Run):**
 - Buy-and-Hold BTC: 0.07%
@@ -304,12 +304,12 @@ Even the "significant" finding (p=0.025) is based on just 10 trials over 14 days
 
 **Average Position Duration:**
 
-| Model | Temperature | Mean Hold (hrs) | Median Hold (hrs) | Mean (days) | Median (days) |
-|-------|-------------|-----------------|-------------------|-------------|---------------|
-| Anthropic | 0.1 | 28.5 | 12 | 1.2 | 0.5 |
-| Anthropic | 0.7 | 16.2 | 8.8 | 0.7 | **0.4 (shortest)** |
-| OpenAI | 0.1 | 30.4 | 21.6 | 1.3 | 0.9 |
-| OpenAI | 0.7 | 27.7 | 21 | 1.2 | 0.9 |
+| Model | Temperature | Mean Hold (hrs) | Median Hold (hrs) |
+|-------|-------------|-----------------|-------------------|
+| Anthropic | 0.1 | 28.5 | 12 | 
+| Anthropic | 0.7 | 16.2 | 8.8 |
+| OpenAI | 0.1 | 30.4 | 21.6 | 
+| OpenAI | 0.7 | 27.7 | 21 | 
 
 **Observations:**
 - **Shortest hold times:** Anthropic temp 0.7 (median 8.8 hrs / 0.4 days) - enters and exits quickly
@@ -318,30 +318,6 @@ Even the "significant" finding (p=0.025) is based on just 10 trials over 14 days
 - **Large median-mean gaps for Anthropic:** Suggests mix of quick trades and occasional longer holds
 - **OpenAI more consistent:** Median closer to mean indicates steadier hold time behavior
 - **No clear correlation with performance:** Both shorter holds (Anthropic 0.7: +3.60%) and longer holds (OpenAI 0.1: +1.40%) achieved positive returns
-
-#### Market Environment & Coin Performance
-
-**Individual Coin Performance During Test Period (Oct 17-30, 2025):**
-
-Understanding each coin's return AND volatility provides context for trading opportunities:
-
-| Coin | Total Return | Volatility (Std Dev) | Avg Intrabar Range | Max Up Move | Max Down Move | Trading Opportunity |
-|------|--------------|----------------------|-------------------|-------------|---------------|---------------------|
-| **SOL** | -0.96% | **1.53%** | 2.33% | +5.36% | -4.95% | **Moderate** (Most volatile) |
-| **DOGE** | -3.06% | **1.51%** | 2.22% | +5.05% | -6.17% | **Moderate** |
-| **BNB** | -5.56% | **1.50%** | 2.17% | +3.29% | -7.54% | **Moderate** |
-| **XRP** | +4.72% | 1.32% | 2.11% | +3.78% | -5.11% | Limited |
-| **ETH** | -2.61% | 1.28% | 1.93% | +4.96% | -4.44% | Limited |
-| **BTC** | +0.07% | **0.97%** | 1.33% | +4.44% | -3.27% | **Limited** (Least volatile) |
-
-**Key Insights:**
-
-**Return vs. Volatility:**
-- **XRP had the best return (+4.72%) but moderate volatility (1.32%)** - steady uptrend, fewer trading opportunities
-- **SOL, DOGE, BNB had highest volatility (1.50-1.53%) but negative returns** - choppy, offering more entry/exit points but requiring good timing
-- **BTC had lowest volatility (0.97%) and flat return (0.07%)** - least opportunity for both directional and swing trading
-
-With this market environment, the LLMs would need to trade actively with leverage and good timing; buy-and-hold wouldn't lead to meaningful profit.
 
 #### Per-Coin Performance Analysis
 
@@ -455,6 +431,14 @@ Aggregated results across all 10 trials show distinct per-coin performance patte
 **Most Consistent:** OpenAI temp 0.1 (lowest std dev at 6.96%)
 **Least Consistent:** Anthropic temp 0.7 (std dev 33.69%, range 91.46%)
 
+![Anthropic temp 0.7 equity overlay](results/statistical_analysis/images/anthropic_temp07_equity_overlay.png)
+
+*Figure 5.1: Anthropic temp 0.7 - All 10 trials overlaid. The dramatic spread illustrates the 91.46% range: some trials reached $18k (Trial 4, Trial 10) while others crashed to $6k (Trial 6). Same model, same market data, wildly different outcomes.*
+
+![Anthropic temp 0.7 trade P&L distribution](results/statistical_analysis/images/anthropic_temp07_return_distribution.png)
+
+*Figure 5.2: Distribution of individual trade P&Ls across all 10 trials. Most trades cluster near breakeven, but the fat tails show occasional large wins and losses. This explains the high variance in final returns.*
+
 ### Temperature Impact on Consistency
 
 **Hypothesis:** Lower temperature (0.1) should produce more consistent results than higher temperature (0.7).
@@ -504,6 +488,22 @@ Aggregated results across all 10 trials show distinct per-coin performance patte
 - **OpenAI:** Consistent balanced profile (~1.17) regardless of temperature
 - **Paradox:** Anthropic 0.1 had consistent but poor risk asymmetry; 0.7 had better asymmetry but wild variance
 
+**Risk Asymmetry Visualization:**
+
+![Anthropic temp 0.7 risk asymmetry](results/statistical_analysis/images/anthropic_temp07_risk_asymmetry_profile.png)
+
+*Figure 5.3: Anthropic temp 0.7 - Trials clustering above the diagonal (favorable upside-to-downside ratio). Note trials T10, T1, and T4 with strong upside deviation (green), while T8, T6, T2, T9 are near the equal volatility line (red/orange).*
+
+![OpenAI temp 0.7 risk asymmetry](results/statistical_analysis/images/openai_temp07_risk_asymmetry_profile.png)
+
+*Figure 5.4: OpenAI temp 0.7 - Tighter clustering near the diagonal (balanced risk profile). All trials show similar upside and downside deviation, demonstrating consistency. Trials T10 and T4 show slightly better upside capture.*
+
+**What these charts show:**
+- **Dots above diagonal:** Favorable asymmetry (bigger gains than losses)
+- **Dots below diagonal:** Unfavorable asymmetry (bigger losses than gains)
+- **Distance from origin:** Overall volatility magnitude
+- **Color:** Trial number identification
+
 ### Advanced Risk Metrics
 
 **Skewness & Kurtosis (Average across 10 trials):**
@@ -545,7 +545,7 @@ Aggregated results across all 10 trials show distinct per-coin performance patte
 > - **Downside Capture** = (Model's average return during down-candles) / (Coin's average return during down-candles) × 100%
 >
 > **How it's calculated:**
-> 1. Load all 4-hour candles for the backtest period (85 candles from Oct 17-30)
+> 1. Load all 4-hour candles for the backtest period (85 candles from Oct 17-31)
 > 2. For each candle, calculate the coin's return: `(close - open) / open × 100`
 > 3. Separate candles into **up-candles** (close > open) and **down-candles** (close < open)
 > 4. Calculate the coin's average return during up-candles and down-candles separately
@@ -564,14 +564,6 @@ Aggregated results across all 10 trials show distinct per-coin performance patte
 - **Downside Capture < 100%** = Model protected capital during declines (good risk management)
 - **Downside Capture > 100%** = Model lost more than the coin's decline (poor timing or over-leveraged)
 
-### Key Insights from Market Context
-
-Given the market environment (Section 4):
-- **XRP (+4.72% total)** was the only strong performer - models that identified and rode this trend would show high XRP upside capture
-- **BTC (+0.07% flat)** - choppy, range-bound price action makes timing critical
-- **SOL, DOGE, BNB (highest volatility, 1.50-1.53%)** - more trading opportunities but requiring precise timing
-- **All models traded 100% long positions** - downside capture ratios will be high (didn't short to profit from declines)
-
 ### Expected Patterns
 
 Based on overall performance (Section 2):
@@ -580,7 +572,9 @@ Based on overall performance (Section 2):
 - **OpenAI temp 0.7 (-0.30% avg return):** Near-zero, suggesting mixed timing - caught some rallies but also got caught in declines
 - **Anthropic temp 0.1 (-10.92% avg return):** Likely high downside capture (poor timing, caught in declining coins) and/or missed XRP rally
 
-> **Note:** Detailed per-coin, per-trial capture ratio analysis is available in the interactive **Statistical Analysis dashboard** (Section 7_Statistical_Analysis.py). The dashboard calculates capture ratios by analyzing all 4-hour candles during each trial and tracking which coins were held during up-moves vs down-moves. This trade-level analysis requires loading full checkpoint files and is best viewed interactively rather than in static summary tables.
+![Anthropic temp 0.7 capture ratios by coin](results/statistical_analysis/images/anthropic_temp07_capture_ratio_by_coin.png)
+
+*Figure 6.1: Anthropic temp 0.7 - Capture ratios by coin across all 10 trials. Green bars (upside capture) consistently exceed red bars (downside capture) for most coins, demonstrating favorable timing. Note the wide variation across trials, reflecting the model's high variance. SOL and ETH show the strongest upside capture patterns.*
 
 ---
 
@@ -652,9 +646,8 @@ Based on overall performance (Section 2):
 
 ### Final Verdict
 
-**Best Overall Model:** Anthropic Claude Sonnet 4.5 at temperature 0.7
+**Best Performing Model:** Anthropic Claude Sonnet 4.5 at temperature 0.7
 - Mean return: +3.60%
-- Sharpe ratio: -1.53
 - Consistency: Low (Std Dev 33.69%)
 - **Observations:** Highest mean return, outperformed both benchmarks. Despite extreme variance, delivered positive positive returns in a challenging market where most coins declined. Best upside/downside asymmetry (1.64 ratio).
 
@@ -672,7 +665,7 @@ Based on overall performance (Section 2):
 **1. Can LLMs trade systematically? Do they follow risk management rules without explicit instruction?**
 
 **Answer:** Yes, but with significant variance.
-- **What they did alright:** All models executed trades systematically, selected leverage (10x-15x), and closed positions without explicit stop-loss rules
+- **What they did fine:** All models executed trades systematically, selected leverage (10x-15x), and closed positions without explicit stop-loss rules
 - **Risk management gaps:** High variance suggests inconsistent risk discipline. Anthropic temp 0.7 ranged from -36% to +56%, indicating some trials took excessive risk while others were conservative
 - **Key finding:** Models followed the trading framework but lacked consistent risk discipline across trials. Temperature 0.1 showed more systematic behavior than 0.7
 
@@ -716,28 +709,86 @@ Based on overall performance (Section 2):
 ## References
 
 - **Alpha Arena (Nof1.ai):** https://nof1.ai/
-- **Experimental Setup:** [EXPERIMENTAL_SETUP.md](EXPERIMENTAL_SETUP.md)
-- **Statistical Analysis Guide:** [STATISTICAL_ANALYSIS_GUIDE.md](STATISTICAL_ANALYSIS_GUIDE.md)
-- **Model Comparison Guide:** [MODEL_COMPARISON_GUIDE.md](MODEL_COMPARISON_GUIDE.md)
-- **Project Documentation:** [PROJECT_DOCUMENTATION.md](PROJECT_DOCUMENTATION.md)
-
 ---
 
 ## Appendix
 
-### A. Full Performance Data
+### A. Understanding Statistical Significance (For Non-Technical Readers)
+
+#### What is a p-value?
+
+When we compare two models (e.g., OpenAI vs Anthropic), we see different returns. But the key question is: **Is one model actually better, or did we just get lucky?**
+
+The **p-value** tells us the probability that the difference we observed was just random luck.
+
+**Simple analogy:** Imagine flipping two coins 10 times each:
+- Coin A: 6 heads, 4 tails
+- Coin B: 4 heads, 6 tails
+
+Are the coins different? Or did you just happen to get that result by chance? A statistical test answers this question.
+
+#### Real Example from Our Data
+
+**Comparison 1: Anthropic temp 0.1 vs temp 0.7**
+
+| Model | Mean Return | Range |
+|-------|-------------|-------|
+| Anthropic temp 0.1 | -10.92% | -39.87% to +4.63% |
+| Anthropic temp 0.7 | +3.60% | -35.87% to +55.59% |
+| **Difference** | **14.52%** | |
+
+**p-value = 0.13 (13%)**
+
+**What this means:** If both temperatures were actually identical, there's a 13% chance we'd see a 14.52% difference just by random luck. Since 13% is fairly likely, we say this difference is **not statistically significant** - we can't be confident the difference is real.
+
+**Why?** Look at the wild variance! Temp 0.7 ranged from -36% to +56% (91% spread). With such huge swings, a 14% average difference could easily be luck.
+
+---
+
+**Comparison 2: OpenAI temp 0.1 vs Anthropic temp 0.1**
+
+| Model | Mean Return | Range | Std Dev |
+|-------|-------------|-------|---------|
+| OpenAI temp 0.1 | +1.40% | -10.77% to +12.29% | 7.34% |
+| Anthropic temp 0.1 | -10.92% | -39.87% to +4.63% | 14.14% |
+| **Difference** | **12.32%** | | |
+
+**p-value = 0.025 (2.5%)**
+
+**What this means:** If both models were actually identical, there's only a 2.5% chance we'd see a 12.32% difference. Since 2.5% is very unlikely, this difference IS **statistically significant** - we can be fairly confident OpenAI truly performed better.
+
+**Why?** Even though the difference (12.32%) is slightly smaller than the Anthropic temp comparison (14.52%), the results were much more consistent across trials (lower variance), making us more confident it's real.
+
+#### The Threshold: p < 0.05
+
+- **p < 0.05** (less than 5%): The difference is probably real → **Statistically significant**
+- **p ≥ 0.05** (5% or more): Could easily be random luck → **Not significant**
+
+In our study, **only 1 out of 6 comparisons** was statistically significant, meaning most observed differences could be explained by random chance given our small sample size (10 trials).
+
+#### Key Takeaway
+
+**Statistical significance depends on TWO things:**
+1. **Size of the difference** (bigger is better)
+2. **Consistency of results** (lower variance is better)
+
+A huge difference with wild variance might not be significant, while a smaller difference with consistent results can be significant.
+
+---
+
+### B. Full Performance Data
 
 [Tables with complete trial-by-trial results]
 
-### B. Statistical Test Details
+### C. Statistical Test Details
 
 [Detailed statistical outputs]
 
-### C. Trade Logs
+### D. Sample Trade Logs
 
 [Sample trade logs showing LLM reasoning]
 
-### D. Configuration Files
+### E. Configuration Files
 
 - **Indicators:** [config/indicators.yaml](config/indicators.yaml)
 - **Models:** [config/models.yaml](config/models.yaml)
