@@ -38,7 +38,7 @@ Out of 6 model comparisons, only **1 showed statistical significance** (p < 0.05
 **Why so few significant results?**
 - High variance (Anthropic temp 0.7 ranged from -36% to +56%)
 - Small sample size (10 trials per config)
-- Short time period (13 days)
+- Short time period (14 days)
 
 ### 2. Timing Matters More Than Direction
 
