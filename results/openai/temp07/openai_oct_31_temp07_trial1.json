@@ -1,0 +1,36 @@
+{
+  "checkpoint_id": "openai_oct_31_temp07_trial1",
+  "created_at": "2025-11-03T12:50:31.782702",
+  "checkpoint_date": "2025-10-31T00:00:00",
+  "account": {
+    "starting_capital": 10000.0,
+    "account_value": 10595.267338999998,
+    "available_cash": 10595.267338999998,
+    "total_return_percent": 5.9526733899999815,
+    "sharpe_ratio": 3.5361593712808577,
+    "total_fees_paid": 142.06913550000002,
+    "total_funding_paid": 0.0
+  },
+  "positions": [],
+  "metadata": {
+    "model": "openai",
+    "start_date": "2025-10-17",
+    "end_date": "2025-10-31",
+    "coins": [
+      "BTC",
+      "ETH",
+      "SOL",
+      "BNB",
+      "XRP",
+      "DOGE"
+    ],
+    "total_iterations": 85,
+    "run_id": 1,
+    "temperature": 0.7
+  },
+  "stats": {
+    "total_trades": 60,
+    "open_positions": 0,
+    "llm_cache_entries": 0
+  }
+}
