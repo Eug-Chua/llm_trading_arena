@@ -1,0 +1,36 @@
+{
+  "checkpoint_id": "anthropic_temp01_trial7",
+  "created_at": "2025-11-06T07:01:15.969769",
+  "checkpoint_date": "2025-10-31T00:00:00",
+  "account": {
+    "starting_capital": 10000.0,
+    "account_value": 10072.37089245,
+    "available_cash": 10072.37089245,
+    "total_return_percent": 0.7237089245000061,
+    "sharpe_ratio": 0.971897560768585,
+    "total_fees_paid": 133.36199599999998,
+    "total_funding_paid": 0.0
+  },
+  "positions": [],
+  "metadata": {
+    "model": "anthropic",
+    "start_date": "2025-10-17",
+    "end_date": "2025-10-31",
+    "coins": [
+      "BTC",
+      "ETH",
+      "SOL",
+      "BNB",
+      "XRP",
+      "DOGE"
+    ],
+    "total_iterations": 85,
+    "run_id": 7,
+    "temperature": 0.1
+  },
+  "stats": {
+    "total_trades": 54,
+    "open_positions": 0,
+    "llm_cache_entries": 0
+  }
+}
