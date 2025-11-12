@@ -1,7 +1,5 @@
 # LLM Trading Arena
 
-**Rigorous statistical evaluation of LLM-based cryptocurrency trading strategies with proper experimental controls**
-
 Inspired by [Alpha Arena](https://nof1.ai/) by Nof1.ai, this project systematically evaluates whether large language models can trade cryptocurrency markets autonomously, and more importantly, *why* certain configurations perform better than others.
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
