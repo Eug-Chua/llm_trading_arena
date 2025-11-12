@@ -776,19 +776,78 @@ A huge difference with wild variance might not be significant, while a smaller d
 
 ---
 
-### B. Full Performance Data
 
-[Tables with complete trial-by-trial results]
+### B. Sample Trade Logs
 
-### C. Statistical Test Details
+    {
+      "iteration": 85,
+      "timestamp": "2025-10-31T00:00:00",
+      "model": "anthropic",
+      "raw_response":
+         "# CHAIN OF THOUGHT
+         **CRITICAL: This is the FINAL candle of the backtest period. I MUST close ALL open positions.**
+         Reviewing my current position:
+         **ETH Position Analysis:**
+         - Entry: $3,803.70
+         - Current: $3,828.40
+         - Unrealized PnL: +$68.39 (+0.65%)
+         - Leverage: 12x
+         - Exit plan: Profit target $3,950, Stop-loss $3,720
+         - Invalidation: \"If price closes below $3,720 on 3-minute candle\"
+         
+         **Technical Analysis:**
+         - Current price $3,828.40 is ABOVE stop-loss ($3,720)
+         - Current price is BELOW profit target ($3,950)
+         - Invalidation condition NOT met (price hasn't closed below $3,720)- RSI (7-period): 49.124 - neutral territory, recovering from oversold\n- RSI (14-period): 40.481 - still below 50, showing weakness
+         - MACD: -80.735 - deeply negative, bearish momentum
+         - Price below EMA20 ($3,927.86) - bearish trend
+         - Recent price action shows recovery from $3,688 low, but still in downtrend
+         
+         **Decision Rationale:**
+         Under normal circumstances, I would HOLD this position as:
+         1. Invalidation condition is NOT met
+         2. Stop-loss has not been hit
+         3. Position is slightly profitable
+         4. RSI showing potential recovery from oversold levels
+         
+         HOWEVER, this is the FINAL candle of the backtest period. Per the explicit instructions:
+         IMPORTANT: This is the FINAL candle of the backtest period. You MUST close ALL open positions. No positions should remain open.
+         **Action: CLOSE POSITION** - Taking small profit and closing all positions as required at end of backtest period.
+         
+         # TRADING DECISIONS
+         
+         ```json
+               {"ETH\": {
+                  "trade_signal_args": {
+                     "coin": "ETH",
+                     "signal": "close_position",
+                     "quantity": 3.0,
+                     "profit_target": 3950.0,
+                     "stop_loss": 3720.0,
+                     "invalidation_condition": "If price closes below $3,720 on 3-minute candle, indicating failed bounce and continuation of downtrend",
+                     "leverage": 12,
+                     "confidence": 0.68,
+                     "risk_usd": 1000.0,
+                     "close_reason": "FINAL candle of backtest period - mandatory position closure. Taking +$68.39 profit (+0.65% return).
+                     }
+                  }
+               },
+      "signals": [
+        {
+          "coin": "ETH",
+          "signal": "close_position",
+          "quantity": 3.0,
+          "leverage": 12,
+          "stop_loss": 3720.0,
+          "profit_target": 3950.0,
+          "confidence": 0.68,
+          "risk_usd": 1000.0,
+          "invalidation_condition": "If price closes below $3,720 on 3-minute candle, indicating failed bounce and continuation of downtrend"
+        }
+      ]
+    }
 
-[Detailed statistical outputs]
-
-### D. Sample Trade Logs
-
-[Sample trade logs showing LLM reasoning]
-
-### E. Configuration Files
+### C. Configuration Files
 
 - **Indicators:** [config/indicators.yaml](config/indicators.yaml)
 - **Models:** [config/models.yaml](config/models.yaml)
