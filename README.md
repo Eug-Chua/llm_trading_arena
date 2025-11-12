@@ -148,6 +148,9 @@ Built with Streamlit featuring:
 - Risk-adjusted performance metrics
 - Capture ratio analysis
 
+## System Architecture
+<img src="system_architecture_dark.png" width="800px">
+
 ---
 
 ## Project Structure
