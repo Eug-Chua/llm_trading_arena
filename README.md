@@ -309,13 +309,7 @@ For production deployment, you would need:
 
 ---
 
-## License
-
-MIT License - See [LICENSE](LICENSE) for details
-
----
-
-**Note:** This is a research/educational project. Not financial advice. Trade at your own risk.
+**Note:** This is a research/educational project. NFA. Trade at your own risk.
 
 ---
 
