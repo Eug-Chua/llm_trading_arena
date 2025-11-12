@@ -1,0 +1,6 @@
+Strategy,Final Value ($),Total Return (%),Sharpe Ratio,Max Drawdown (%),Volatility (%)
+Buy-and-Hold BTC,"10,007.42",0.07,0.268,-7.82,45.15
+Equal-Weight Portfolio (6 coins),"9,876.67",-1.23,-0.272,-10.71,57.62
+Random Trading (seed=42),"10,340.14",3.40,4.914,-2.92,18.08
+Random Trading (seed=123),"10,361.37",3.61,5.352,-2.21,17.59
+Random Trading (seed=999),"10,424.35",4.24,3.827,-5.60,29.45
