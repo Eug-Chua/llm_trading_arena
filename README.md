@@ -188,51 +188,123 @@ llm_trading_arena/
 
 ## Quick Start
 
+### Prerequisites
+
+- Python 3.10 or higher
+- API keys from [Anthropic](https://console.anthropic.com/) and/or [OpenAI](https://platform.openai.com/)
+
 ### Installation
 
 ```bash
-# Clone repository
-git clone https://github.com/yourusername/llm_trading_arena.git
+# 1. Clone repository
+git clone https://github.com/eug-chua/llm_trading_arena.git
 cd llm_trading_arena
 
-# Install dependencies
+# 2. Create virtual environment (recommended)
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# 3. Install dependencies
 pip install -r requirements.txt
 
-# Set up API keys
-cp .env.example .env
-# Edit .env with your Anthropic/OpenAI API keys
+# 4. Set up API keys
+# Create a .env file in the project root with your API keys:
+cat > .env << EOF
+ANTHROPIC_API_KEY=your_anthropic_key_here
+OPENAI_API_KEY=your_openai_key_here
+EOF
+
+# Or manually create .env file and add:
+# ANTHROPIC_API_KEY=sk-ant-...
+# OPENAI_API_KEY=sk-proj-...
 ```
 
-### Run Backtest
+### Verify Installation
 
 ```bash
-# Run single trial
+# Check that historical data is present
+ls data/historical/
+# Should see: BTC_4h_17-30_Oct_2025.csv, ETH_4h_17-30_Oct_2025.csv, etc.
+
+# Test that config is loaded
+python -c "from src.data.indicators import load_indicator_config; print('Config loaded:', load_indicator_config()['data_interval'])"
+# Should print: Config loaded: 4h
+```
+
+### Run Your First Backtest
+
+```bash
+# Run a single trial (takes ~5-10 minutes)
 python scripts/run_backtest.py \
   --model anthropic \
   --temperature 0.7 \
   --start 2025-10-17 \
-  --end 2025-10-31 \
+  --end 2025-10-30 \
   --run-id 1
 
-# Run multiple trials (bash loop)
+# Results will be saved to: results/checkpoints/anthropic_temp07_trial1.json
+```
+
+### Run Multiple Trials for Statistical Analysis
+
+```bash
+# Run 10 trials for one configuration (takes ~1 hour)
 for i in {1..10}; do
   python scripts/run_backtest.py \
     --model openai \
     --temperature 0.1 \
     --start 2025-10-17 \
-    --end 2025-10-31 \
+    --end 2025-10-30 \
     --run-id $i
 done
+
+# Generate statistical summary
+python scripts/statistical_analysis.py
+
+# Results will be in: results/statistical_analysis/
 ```
 
 ### View Results
 
 ```bash
-# Launch interactive dashboard
+# Option 1: Interactive dashboard (recommended)
 streamlit run frontend/Home.py
+# Open browser to http://localhost:8501
 
-# Generate statistical analysis
-python scripts/statistical_analysis.py
+# Option 2: View checkpoint JSON directly
+cat results/checkpoints/anthropic_temp07_trial1.json | python -m json.tool | head -50
+
+# Option 3: Read analysis documents
+cat FINDINGS.md
+```
+
+### Troubleshooting
+
+**Import errors:**
+```bash
+# Make sure you're in the project root directory
+pwd  # Should end in /llm_trading_arena
+
+# Reinstall dependencies
+pip install -r requirements.txt --upgrade
+```
+
+**API key errors:**
+```bash
+# Verify .env file exists and has keys
+cat .env
+# Should show: ANTHROPIC_API_KEY=sk-ant-...
+
+# Test API connection
+python -c "import anthropic; print('Anthropic OK')"
+python -c "import openai; print('OpenAI OK')"
+```
+
+**Missing historical data:**
+```bash
+# Historical data is included in the repository
+# If missing, check that you cloned the full repo (not shallow clone)
+git log --oneline | head -5
 ```
 
 ---
@@ -243,7 +315,7 @@ python scripts/statistical_analysis.py
 - **[FINDINGS.md](FINDINGS.md)** - Complete statistical analysis and insights (recommended starting point)
 - **[EXPERIMENTAL_SETUP.md](EXPERIMENTAL_SETUP.md)** - Experimental design, parameters, assumptions
 - **[STATISTICAL_ANALYSIS_GUIDE.md](STATISTICAL_ANALYSIS_GUIDE.md)** - Understanding variance and significance
-- **[MODEL_COMPARISON_GUIDE.md](MODEL_COMPARISON_GUIDE.md)** - Head-to-head performance analysis
+- **[SYSTEM_DESIGN.md](SYSTEM_DESIGN.md)** - System architecture and component interactions
 
 ---
 
