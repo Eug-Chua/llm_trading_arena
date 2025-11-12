@@ -149,7 +149,7 @@ Built with Streamlit featuring:
 - Capture ratio analysis
 
 ## System Architecture
-<img src="system_architecture_dark.png" width="800px">
+<img src="system_architecture.png" width="800px">
 
 ---
 
